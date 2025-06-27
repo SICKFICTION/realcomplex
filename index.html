@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conformal Mapping Visualizer</title>
+  <style>
+    body { margin:0; padding:0; display:flex; height:100vh; background:#111; color:#eee; font-family:sans-serif; overflow:hidden; }
+    #controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:10px; border-radius:6px; z-index:10; display:flex; gap:8px; align-items:center; }
+    #controls input, #controls select { color:#000; padding:2px 4px; }
+    .canvas-container { position:relative; flex:1; display:flex; flex-direction:column; }
+    .canvas-label { text-align:center; color:#aaa; margin-bottom:4px; font-size:14px; }
+    canvas { flex:1; background:#222; cursor:crosshair; touch-action:none; }
+    .domain { border-right:2px solid #555; }
+    .codomain { border-left:2px solid #555; }
+    .tooltip { position:absolute; background:rgba(0,0,0,0.7); color:#fff; padding:2px 4px; border-radius:4px; font-size:12px; pointer-events:none; white-space:nowrap; z-index:20; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <span style="color:#fff; font-weight:bold;">f(z) = z²</span>
+    <label>Tool:
+      <select id="toolSelect">
+        <option value="freehand">Freehand</option>
+        <option value="line">Line</option>
+        <option value="circle">Circle</option>
+        <option value="polygon">Polygon</option>
+        <option value="sine">Sine Wave</option>
+        <option value="spiral">Spiral</option>
+        <option value="star">Star</option>
+        <option value="dot">Dot</option>
+        <option value="etch">Etch-a-Sketch</option>
+      </select>
+    </label>
+    <label id="paramLabel" style="display:none">
+      Turns/Sides:
+      <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:50px" />
+    </label>
+    <button id="clearBtn">Clear</button>
+    <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
+    <label>Zoom:
+      <input type="range" id="zoomSlider" min="0.1" max="10" step="0.1" value="1" style="width:100px" />
+    </label>
+  </div>
+  <div id="tooltip" class="tooltip" style="display:none;"></div>
+  <div class="canvas-container">
+    <div class="canvas-label">Real Plane</div>
+    <canvas id="canvasDomain" class="domain"></canvas>
+  </div>
+  <div class="canvas-container">
+    <div class="canvas-label">Complex Plane</div>
+    <canvas id="canvasCodomain" class="codomain"></canvas>
+  </div>
+  <script>
+    const canvases = { domain: document.getElementById('canvasDomain'), codomain: document.getElementById('canvasCodomain') };
+    const ctx = { domain: canvases.domain.getContext('2d'), codomain: canvases.codomain.getContext('2d') };
+    const toolSelect = document.getElementById('toolSelect');
+    const paramLabel = document.getElementById('paramLabel');
+    const paramInput = document.getElementById('paramInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const continuousToggle = document.getElementById('continuousToggle');
+    const tooltip = document.getElementById('tooltip');
+
+    let origin = {}, baseScale = 40, scale = baseScale;
+    let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
+    const MAX_STROKES = 6, strokes = [], dots = [];
+
+    function userFn(z) { return { re: z.re*z.re - z.im*z.im, im: 2*z.re*z.im }; }
+    let prevInv = null;
+    function sqrtBranches(w) { const r=Math.hypot(w.re,w.im), t=Math.atan2(w.im,w.re), rr=Math.sqrt(r), ang=t/2; return [{re:rr*Math.cos(ang),im:rr*Math.sin(ang)},{re:-rr*Math.cos(ang),im:-rr*Math.sin(ang)}]; }
+    function chooseRoot(w) { const [r1,r2]=sqrtBranches(w); if(!prevInv) prevInv=r1; const d1=(r1.re-prevInv.re)**2+(r1.im-prevInv.im)**2, d2=(r2.re-prevInv.re)**2+(r2.im-prevInv.im)**2; prevInv=d1<d2?r1:r2; return prevInv; }
+    function invFn(w) { return continuousToggle.checked?chooseRoot(w):sqrtBranches(w)[0]; }
+
+    function toComplex(x,y,key){ return { re:(x-origin[key].x)/scale, im:(origin[key].y-y)/scale }; }
+    function toCanvas(z,key){ return { x:origin[key].x+z.re*scale, y:origin[key].y-z.im*scale }; }
+
+    function resize() {
+      // adjust scale based on zoom slider
+      const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+      scale = baseScale * zoomVal; canvases.domain.width=window.innerWidth/2; canvases.domain.height=window.innerHeight; canvases.codomain.width=window.innerWidth/2; canvases.codomain.height=window.innerHeight; origin.domain={x:canvases.domain.width/2,y:canvases.domain.height/2}; origin.codomain={x:canvases.codomain.width/2,y:canvases.codomain.height/2}; redrawAll(); }
+    window.addEventListener('resize', resize);
+    // zoom slider listener
+    const zoomSlider = document.getElementById('zoomSlider');
+    zoomSlider.addEventListener('input', resize);
+
+    toolSelect.addEventListener('change', () => { paramLabel.style.display = (['spiral','star','polygon'].includes(toolSelect.value)) ? 'inline-block':'none'; });
+
+    function drawGrid(key) {
+      const c=canvases[key], g=ctx[key]; g.clearRect(0,0,c.width,c.height);
+      g.strokeStyle='#444'; g.lineWidth=1;
+      for(let x=0;x<c.width;x+=scale){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,c.height); g.stroke(); }
+      for(let y=0;y<c.height;y+=scale){ g.beginPath(); g.moveTo(0,y); g.lineTo(c.width,y); g.stroke(); }
+      g.strokeStyle='#888'; g.lineWidth=2;
+      g.beginPath(); g.moveTo(origin[key].x,0); g.lineTo(origin[key].x,c.height); g.stroke();
+      g.beginPath(); g.moveTo(0,origin[key].y); g.lineTo(c.width,origin[key].y); g.stroke();
+    }
+
+    function redrawAll(){ drawGrid('domain'); drawGrid('codomain'); strokes.forEach((s,i)=>{ const alpha=i<strokes.length-MAX_STROKES?0.2:1, color=`hsla(${s.hue},70%,60%,${alpha})`; ['domain','codomain'].forEach(key=>{ const pts=key===s.canvas?s.pts:s.imagePts, g=ctx[key]; g.strokeStyle=color; g.lineWidth=2; drawShape(g,pts,s.mode); }); }); dots.forEach(d=>{ ['domain','codomain'].forEach((key,idx)=>{ const g=ctx[key], lab=(idx===0? d.label.dom: invFn(d.label.dom)), p=(idx===0? {x:d.x,y:d.y}: toCanvas(lab,key)); g.fillStyle='yellow'; g.beginPath(); g.arc(p.x,p.y,5,0,2*Math.PI); g.fill(); g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`,p.x+6,p.y-6); }); }); }
+
+    function drawShape(g,pts,mode){ if(!pts||pts.length<2)return; g.beginPath(); g.moveTo(pts[0].x,pts[0].y); pts.forEach((p,i)=>{ if(i>0) g.lineTo(p.x,p.y); }); if(!['freehand','line','sine','spiral','dot','etch'].includes(mode)) g.closePath(); g.stroke(); }
+
+    function computePts(tool,A,B){ const pts=[], dx=B.x-A.x,dy=B.y-A.y; switch(tool){
+      case 'line': for(let t=0;t<=1;t+=0.01) pts.push({x:A.x+dx*t,y:A.y+dy*t}); break;
+      case 'circle': { const cx=(A.x+B.x)/2,cy=(A.y+B.y)/2,r=Math.hypot(dx,dy)/2; for(let a=0;a<2*Math.PI;a+=0.02) pts.push({x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}); pts.push(pts[0]); } break;
+      case 'polygon': { const sides=Math.max(3,parseInt(paramInput.value)||5),ang0=Math.atan2(dy,dx),rad=Math.hypot(dx,dy),verts=[]; for(let i=0;i<sides;i++){ const ang=ang0+2*Math.PI*i/sides; verts.push({x:A.x+Math.cos(ang)*rad,y:A.y+Math.sin(ang)*rad}); } verts.push(verts[0]); const sp=50; for(let k=0;k<verts.length-1;k++){ const P=verts[k],Q=verts[k+1],sx=Q.x-P.x,sy=Q.y-P.y; for(let t=0;t<=1;t+=1/sp) pts.push({x:P.x+sx*t,y:P.y+sy*t}); } } break;
+      case 'sine': { const w=Math.hypot(dx,dy),ux=dx/w,uy=dy/w,max=Math.hypot(canvases[activeCanvas].width,canvases[activeCanvas].height); for(let t=0;t<max;t+=2){ const cx=A.x+ux*t,cy=A.y+uy*t,amp=w/4,ph=2*Math.PI*t/w; pts.push({x:cx-uy*amp*Math.sin(ph),y:cy+ux*amp*Math.sin(ph)});} } break;
+      case 'spiral': { const turns=Math.max(1,parseInt(paramInput.value)||3),base=Math.hypot(dx,dy),b=Math.log(1.618)/(Math.PI*0.5),a0=Math.atan2(dy,dx),maxT=turns*2*Math.PI; for(let th=0;th<=maxT;th+=0.05){ const r=base*Math.exp(b*th); pts.push({x:A.x+Math.cos(a0+th)*r,y:A.y+Math.sin(a0+th)*r});} } break;
+      case 'star': { const n=Math.max(3,parseInt(paramInput.value)||5),rad=Math.hypot(dx,dy),a0=Math.atan2(dy,dx),verts=[]; if(n%2===0){ const h=n/2,f=[],s=[]; for(let i=0;i<h;i++){ const a=a0+2*Math.PI*i/h; f.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } for(let i=0;i<h;i++){ const a=a0+Math.PI/n+2*Math.PI*i/h; s.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } verts.push(...f,...s,f[0]); } else { const skip=Math.floor(n/2); for(let i=0;i<n;i++){ const idx=(i*skip)%n,a=a0+2*Math.PI*idx/n; verts.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } verts.push(verts[0]); } const sp=50; for(let k=0;k<verts.length-1;k++){ const P=verts[k],Q=verts[k+1],sx=Q.x-P.x,sy=Q.y-P.y; for(let t=0;t<=1;t+=1/sp) pts.push({x:P.x+sx*t,y:P.y+sy*t}); } } break;
+    } return pts; }
+
+    function startDraw(evt){ evt.preventDefault(); if(continuousToggle.checked) prevInv=null; const p=getPos(evt,activeCanvas); if(toolSelect.value==='dot'){ const z=toComplex(p.x,p.y,activeCanvas); dots.push({canvas:activeCanvas,x:p.x,y:p.y,label:{dom:z}}); redrawAll(); return;} isDrawing=true; startPt=p; currentPts=[p]; }
+    function moveDraw(evt){ if(!isDrawing) return; const tool=toolSelect.value,p=getPos(evt,activeCanvas); if(tool==='freehand'){ evt.preventDefault(); currentPts.push(p); redrawAll(); ['domain','codomain'].forEach(key=>{ const pts=key===activeCanvas?currentPts:currentPts.map(pt=>toCanvas(tool==='freehand'? (activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas))) :toComplex(pt.x,pt.y,activeCanvas),key)); ctx[key].strokeStyle='#fff'; ctx[key].lineWidth=2; drawShape(ctx[key],pts,'freehand'); }); } else if(tool!=='dot'){ evt.preventDefault(); const pts=computePts(tool,startPt,p); const img=pts.map(pt=>toCanvas(activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas)), activeCanvas==='domain'?'codomain':'domain')); redrawAll(); ['domain','codomain'].forEach(key=>{ const pts2=key===activeCanvas?pts:img; ctx[key].strokeStyle='#fff'; ctx[key].lineWidth=2; drawShape(ctx[key],pts2,tool); }); } }
+    function endDraw(evt){ if(!isDrawing) return; evt.preventDefault(); isDrawing=false; const tool=toolSelect.value; if(tool==='dot') return; const ePt=getPos(evt,activeCanvas); const pts=tool==='freehand'?currentPts:computePts(tool,startPt,ePt); const img=pts.map(pt=>toCanvas(activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas)), activeCanvas==='domain'?'codomain':'domain')); strokes.push({canvas:activeCanvas,mode:tool,pts:pts,imagePts:img,hue:Math.random()*360}); if(strokes.length>MAX_STROKES) strokes.shift(); redrawAll(); }
+    function getPos(evt,key){ const r=canvases[key].getBoundingClientRect(),t=evt.touches?evt.touches[0]:null; return {x:(t?t.clientX:evt.clientX)-r.left,y:(t?t.clientY:evt.clientY)-r.top}; }
+
+    ['mousedown','touchstart'].forEach(e=>{ canvases.domain.addEventListener(e,()=>activeCanvas='domain'); canvases.codomain.addEventListener(e,()=>activeCanvas='codomain'); canvases.domain.addEventListener(e,startDraw); canvases.codomain.addEventListener(e,startDraw); });
+    ['mousemove','touchmove'].forEach(e=>{ canvases.domain.addEventListener(e,moveDraw); canvases.codomain.addEventListener(e,moveDraw); });
+    ['mouseup','touchend','mouseleave','touchcancel'].forEach(e=>window.addEventListener(e,endDraw));
+    canvases.domain.addEventListener('mousemove',evt=>{ const p=getPos(evt,'domain'),z=toComplex(p.x,p.y,'domain'); if(z.re==null||z.im==null){tooltip.style.display='none';return;} tooltip.style.display='block'; tooltip.textContent=`x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`; tooltip.style.left=evt.clientX+10+'px'; tooltip.style.top=evt.clientY+10+'px'; });
+    canvases.codomain.addEventListener('mousemove',evt=>{ const p=getPos(evt,'codomain'),w=toComplex(p.x,p.y,'codomain'); if(w.re==null||w.im==null){tooltip.style.display='none';return;} tooltip.style.display='block'; tooltip.textContent=`Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`; tooltip.style.left=evt.clientX+10+'px'; tooltip.style.top=evt.clientY+10+'px'; });
+    canvases.domain.addEventListener('mouseleave',()=>tooltip.style.display='none'); canvases.codomain.addEventListener('mouseleave',()=>tooltip.style.display='none');
+    clearBtn.addEventListener('click',()=>{ strokes.length=0; dots.length=0; redrawAll(); });
+    resize();
+
+    // Etch-a-Sketch state
+    let etchActive = false;
+    let etchCursor = { re: 0, im: 0 };
+
+    // Handle mode switch for etch-a-sketch
+    toolSelect.addEventListener('change', () => {
+      const mode = toolSelect.value;
+      etchActive = (mode === 'etch');
+      paramLabel.style.display = (['spiral','star','polygon'].includes(mode)) ? 'inline-block' : 'none';
+      if (etchActive) {
+        // Start new etch stroke with no initial anchor
+        strokes.push({
+          canvas: 'domain',
+          mode: 'etch',
+          pts: [],
+          imagePts: [],
+          hue: Math.random() * 360
+        });
+        etchCursor = { re: 0, im: 0 };
+        if (strokes.length > MAX_STROKES) strokes.shift();
+        redrawAll();
+      }
+    });
+
+    // WASD controls for etch-a-sketch
+    window.addEventListener('keydown', evt => {
+      if (!etchActive) return;
+      const step = 1/scale;  // move by 1 pixel in complex units // one complex unit
+      switch (evt.key.toLowerCase()) {
+        case 'w': etchCursor.im += step; break;
+        case 's': etchCursor.im -= step; break;
+        case 'a': etchCursor.re -= step; break;
+        case 'd': etchCursor.re += step; break;
+        default: return; // ignore other keys
+      }
+      // Append to current etch stroke
+      const stroke = strokes[strokes.length-1];
+      const px = toCanvas(etchCursor, 'domain');
+      stroke.pts.push(px);
+      const mapped = toCanvas(userFn(etchCursor), 'codomain');
+      stroke.imagePts.push(mapped);
+      redrawAll();
+      evt.preventDefault();
+    });
+  </script>
+</body>
+</html>
