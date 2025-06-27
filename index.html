@@ -128,43 +128,48 @@
 
     // Handle mode switch for etch-a-sketch
     toolSelect.addEventListener('change', () => {
-      const mode = toolSelect.value;
-      etchActive = (mode === 'etch');
-      paramLabel.style.display = (['spiral','star','polygon'].includes(mode)) ? 'inline-block' : 'none';
+      etchActive = (toolSelect.value === 'etch');
+      paramLabel.style.display = (['spiral','star','polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
       if (etchActive) {
-        // Start new etch stroke with no initial anchor
-        strokes.push({
-          canvas: 'domain',
-          mode: 'etch',
-          pts: [],
-          imagePts: [],
-          hue: Math.random() * 360
-        });
         etchCursor = { re: 0, im: 0 };
-        if (strokes.length > MAX_STROKES) strokes.shift();
-        redrawAll();
       }
     });
 
     // WASD controls for etch-a-sketch
     window.addEventListener('keydown', evt => {
       if (!etchActive) return;
-      const step = 1/scale;  // move by 1 pixel in complex units // one complex unit
+      const step = 1/scale;
       switch (evt.key.toLowerCase()) {
         case 'w': etchCursor.im += step; break;
         case 's': etchCursor.im -= step; break;
         case 'a': etchCursor.re -= step; break;
         case 'd': etchCursor.re += step; break;
-        default: return; // ignore other keys
+        default: return;
       }
-      // Append to current etch stroke
-      const stroke = strokes[strokes.length-1];
-      const px = toCanvas(etchCursor, 'domain');
-      stroke.pts.push(px);
-      const mapped = toCanvas(userFn(etchCursor), 'codomain');
-      stroke.imagePts.push(mapped);
+      // Ensure we have an etch stroke initialized
+      let stroke = strokes[strokes.length - 1];
+      if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
+        stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
+        strokes.push(stroke);
+        if (strokes.length > MAX_STROKES) strokes.shift();
+      }
+      // Append new point to stroke
+      // Append new point to stroke in pixel coordinates
+      stroke.pts.push(toCanvas(etchCursor, 'domain'));
+      stroke.imagePts.push(toCanvas(userFn(etchCursor), 'codomain'));
       redrawAll();
       evt.preventDefault();
+    });
+  </script>
+  <!-- Thank You Icon -->
+  <div id="thankYouIcon" style="position:fixed; bottom:10px; right:10px; font-size:24px; cursor:pointer; color:red; z-index:100;">❤️</div>
+  <div id="thankYouPopup" style="display:none; position:fixed; bottom:40px; right:10px; background:rgba(0,0,0,0.8); color:#fff; padding:10px; border-radius:6px; max-width:220px; font-size:12px; z-index:100;">
+    Thank you for using Real Complex, I hope you find it useful. If you have any questions or bugs or love it enough to support then contact me / paypal <a href="mailto:sickfiction@gmail.com" style="color:#fff; text-decoration:underline;">sickfiction@gmail.com</a> Have a great day. <br/>— James
+  </div>
+  <script>
+    document.getElementById('thankYouIcon').addEventListener('click', () => {
+      const popup = document.getElementById('thankYouPopup');
+      popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
     });
   </script>
 </body>
