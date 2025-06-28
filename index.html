@@ -77,6 +77,61 @@
             white-space: nowrap;
             z-index: 20;
         }
+
+        .directional-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 5px;
+            width: 80px;
+            height: 80px;
+            z-index: 15;
+        }
+
+        .direction-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #555;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .direction-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .direction-btn:active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .direction-btn.up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .direction-btn.left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .direction-btn.right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        .direction-btn.down {
+            grid-column: 2;
+            grid-row: 3;
+        }
     </style>
 </head>
 
@@ -146,10 +201,22 @@
     <div class="canvas-container">
         <div class="canvas-label">z plane</div>
         <canvas id="canvasDomain" class="domain"></canvas>
+        <div class="directional-controls">
+            <div class="direction-btn up" data-direction="up">↑</div>
+            <div class="direction-btn left" data-direction="left">←</div>
+            <div class="direction-btn right" data-direction="right">→</div>
+            <div class="direction-btn down" data-direction="down">↓</div>
+        </div>
     </div>
     <div class="canvas-container">
         <div class="canvas-label">w plane</div>
         <canvas id="canvasCodomain" class="codomain"></canvas>
+        <div class="directional-controls">
+            <div class="direction-btn up" data-direction="up">↑</div>
+            <div class="direction-btn left" data-direction="left">←</div>
+            <div class="direction-btn right" data-direction="right">→</div>
+            <div class="direction-btn down" data-direction="down">↓</div>
+        </div>
     </div>
     <script>
         const canvases = { domain: document.getElementById('canvasDomain'), codomain: document.getElementById('canvasCodomain') };
@@ -384,10 +451,15 @@
 
         // Update transformations when function changes
         functionSelect.addEventListener('change', () => {
+            // Update all stroke transformations (lines, circles, stars, spirals, etc.)
+            updateStrokeTransformations();
+
             // Update all image transformations
             images.forEach(img => updateImageTransformation(img));
+
             // Update all text transformations
             updateTextTransformations();
+
             redrawAll();
         });
 
@@ -403,7 +475,7 @@
         });
 
         function drawGrid(key) {
-            const c = canvases[key], g = ctx[key]; 
+            const c = canvases[key], g = ctx[key];
             g.clearRect(0, 0, c.width, c.height);
 
             // Calculate offset to align background grid with axes
@@ -413,53 +485,53 @@
             const offsetY = originY % scale;
 
             // Draw background grid aligned with axes
-            g.strokeStyle = '#444'; 
+            g.strokeStyle = '#444';
             g.lineWidth = 1;
-            
+
             // Vertical lines
-            for (let x = offsetX; x < c.width; x += scale) { 
-                g.beginPath(); 
-                g.moveTo(x, 0); 
-                g.lineTo(x, c.height); 
-                g.stroke(); 
+            for (let x = offsetX; x < c.width; x += scale) {
+                g.beginPath();
+                g.moveTo(x, 0);
+                g.lineTo(x, c.height);
+                g.stroke();
             }
-            for (let x = offsetX - scale; x >= 0; x -= scale) { 
-                g.beginPath(); 
-                g.moveTo(x, 0); 
-                g.lineTo(x, c.height); 
-                g.stroke(); 
+            for (let x = offsetX - scale; x >= 0; x -= scale) {
+                g.beginPath();
+                g.moveTo(x, 0);
+                g.lineTo(x, c.height);
+                g.stroke();
             }
-            
+
             // Horizontal lines
-            for (let y = offsetY; y < c.height; y += scale) { 
-                g.beginPath(); 
-                g.moveTo(0, y); 
-                g.lineTo(c.width, y); 
-                g.stroke(); 
+            for (let y = offsetY; y < c.height; y += scale) {
+                g.beginPath();
+                g.moveTo(0, y);
+                g.lineTo(c.width, y);
+                g.stroke();
             }
-            for (let y = offsetY - scale; y >= 0; y -= scale) { 
-                g.beginPath(); 
-                g.moveTo(0, y); 
-                g.lineTo(c.width, y); 
-                g.stroke(); 
+            for (let y = offsetY - scale; y >= 0; y -= scale) {
+                g.beginPath();
+                g.moveTo(0, y);
+                g.lineTo(c.width, y);
+                g.stroke();
             }
 
             // Draw main axes at true origin positions
-            g.strokeStyle = '#888'; 
+            g.strokeStyle = '#888';
             g.lineWidth = 2;
-            g.beginPath(); 
-            g.moveTo(originX, 0); 
-            g.lineTo(originX, c.height); 
+            g.beginPath();
+            g.moveTo(originX, 0);
+            g.lineTo(originX, c.height);
             g.stroke();
-            g.beginPath(); 
-            g.moveTo(0, originY); 
-            g.lineTo(c.width, originY); 
+            g.beginPath();
+            g.moveTo(0, originY);
+            g.lineTo(c.width, originY);
             g.stroke();
 
             // Determine appropriate step size and unit scale based on zoom
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             let step, unitScale;
-            
+
             if (zoomVal < 0.5) {
                 step = 1;
                 unitScale = 10; // Show 10, 20, 30, etc.
@@ -492,24 +564,24 @@
             // Draw real axis labels (horizontal) - only on grid lines
             for (let x = offsetX; x <= c.width; x += scale * step) {
                 if (Math.abs(x - originX) < 5) continue; // Skip origin
-                
+
                 // Calculate the mathematical value 
                 const gridSteps = Math.round((x - originX) / scale);
                 const mathValue = gridSteps * unitScale;
-                
+
                 if (x >= 20 && x <= c.width - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
                     g.fillText(displayValue, x, originY + 15);
                 }
             }
-            
+
             // Negative side for real axis
             for (let x = offsetX - scale * step; x >= 0; x -= scale * step) {
                 if (Math.abs(x - originX) < 5) continue; // Skip origin
-                
+
                 const gridSteps = Math.round((x - originX) / scale);
                 const mathValue = gridSteps * unitScale;
-                
+
                 if (x >= 20 && x <= c.width - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
                     g.fillText(displayValue, x, originY + 15);
@@ -519,28 +591,28 @@
             // Draw imaginary axis labels (vertical) - only on grid lines
             g.textAlign = 'left';
             g.textBaseline = 'middle';
-            
+
             for (let y = offsetY; y <= c.height; y += scale * step) {
                 if (Math.abs(y - originY) < 5) continue; // Skip origin
-                
+
                 // Calculate the mathematical value (negative because canvas y increases downward)
                 const gridSteps = -Math.round((y - originY) / scale);
                 const mathValue = gridSteps * unitScale;
-                
+
                 if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
                     const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
                     g.fillText(label, originX + 15, y);
                 }
             }
-            
+
             // Negative side for imaginary axis
             for (let y = offsetY - scale * step; y >= 0; y -= scale * step) {
                 if (Math.abs(y - originY) < 5) continue; // Skip origin
-                
+
                 const gridSteps = -Math.round((y - originY) / scale);
                 const mathValue = gridSteps * unitScale;
-                
+
                 if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
                     const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
@@ -699,7 +771,7 @@
                     if (isOriginal) {
                         // Check if corners form a proper rectangle (not warped)
                         const [tl, tr, br, bl] = img.corners;
-                        
+
                         // Check if it's still a rectangle (parallel sides, right angles)
                         const isRectangular = (
                             Math.abs((tr.x - tl.x) - (br.x - bl.x)) < 5 && // Top and bottom sides parallel
@@ -714,7 +786,7 @@
                             const maxX = Math.max(tl.x, tr.x, br.x, bl.x);
                             const minY = Math.min(tl.y, tr.y, br.y, bl.y);
                             const maxY = Math.max(tl.y, tr.y, br.y, bl.y);
-                            
+
                             // Draw image to fit the rectangular bounds
                             g.drawImage(img.element, minX, minY, maxX - minX, maxY - minY);
                         } else {
@@ -1310,72 +1382,39 @@
 
         // WASD controls for etch-a-sketch and arrow keys for panning
         window.addEventListener('keydown', evt => {
-            // Etch-a-sketch controls
-            if (etchActive) {
-                const step = 1 / scale;
-                switch (evt.key.toLowerCase()) {
-                    case 'w': etchCursor.im += step; break;
-                    case 's': etchCursor.im -= step; break;
-                    case 'a': etchCursor.re -= step; break;
-                    case 'd': etchCursor.re += step; break;
-                    default: return;
-                }
-            } else {
-                // Pan controls with arrow keys or WASD
-                const panStep = scale * 0.1; // Pan by 10% of a grid unit
-                let shouldRedraw = false;
-                
-                switch (evt.key) {
-                    case 'ArrowUp':
-                    case 'w':
-                    case 'W':
-                        origin.domain.y += panStep;
-                        origin.codomain.y += panStep;
-                        shouldRedraw = true;
-                        break;
-                    case 'ArrowDown':
-                    case 's':
-                    case 'S':
-                        origin.domain.y -= panStep;
-                        origin.codomain.y -= panStep;
-                        shouldRedraw = true;
-                        break;
-                    case 'ArrowLeft':
-                    case 'a':
-                    case 'A':
-                        origin.domain.x += panStep;
-                        origin.codomain.x += panStep;
-                        shouldRedraw = true;
-                        break;
-                    case 'ArrowRight':
-                    case 'd':
-                    case 'D':
-                        origin.domain.x -= panStep;
-                        origin.codomain.x -= panStep;
-                        shouldRedraw = true;
-                        break;
-                    default: return;
-                }
-                
-                if (shouldRedraw) {
-                    evt.preventDefault();
-                    redrawAll();
+            let direction = null;
+
+            // Map keys to directions
+            switch (evt.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    direction = 'up';
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    direction = 'down';
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    direction = 'left';
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    direction = 'right';
+                    break;
+                default:
                     return;
-                }
             }
-            // Ensure we have an etch stroke initialized
-            let stroke = strokes[strokes.length - 1];
-            if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
-                stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
-                strokes.push(stroke);
-                if (strokes.length > MAX_STROKES) strokes.shift();
+
+            if (direction) {
+                evt.preventDefault();
+                handleDirectionalInput(direction);
+                return;
             }
-            // Append new point to stroke
-            // Append new point to stroke in pixel coordinates
-            stroke.pts.push(toCanvas(etchCursor, 'domain'));
-            stroke.imagePts.push(toCanvas(userFn(etchCursor), 'codomain'));
-            redrawAll();
-            evt.preventDefault();
         });
 
         // Integer Grid functions (formerly chessboard)
@@ -1811,7 +1850,7 @@
             // Use a moderate default size that maintains aspect ratio
             const canvasSize = Math.min(canvases[canvas].width, canvases[canvas].height);
             const defaultSize = Math.min(canvasSize * 0.25, 200); // Slightly larger default size
-            
+
             const aspectRatio = imgElement.width / imgElement.height;
             let width, height;
 
@@ -2066,40 +2105,40 @@
         function drawWarpedImage(g, img) {
             // Draw warped image using proper stretching and warping
             // Map the entire image to fit within the corner boundaries
-            
+
             // Save the current context state
             g.save();
-            
+
             try {
                 // Get the four corners of the warped image
                 const [tl, tr, br, bl] = img.corners;
-                
+
                 // Draw the image in segments using transforms
                 // Divide the image into a grid and transform each segment
                 const gridResolution = 15; // Number of segments per side for smooth warping
-                
+
                 for (let i = 0; i < gridResolution; i++) {
                     for (let j = 0; j < gridResolution; j++) {
                         const u1 = i / gridResolution;
                         const v1 = j / gridResolution;
                         const u2 = (i + 1) / gridResolution;
                         const v2 = (j + 1) / gridResolution;
-                        
+
                         // Source rectangle in original image (map entire image to corners)
                         const sx = u1 * img.element.width;
                         const sy = v1 * img.element.height;
                         const sw = (u2 - u1) * img.element.width;
                         const sh = (v2 - v1) * img.element.height;
-                        
+
                         // Destination quadrilateral corners using bilinear interpolation
                         const destTL = bilinearInterpolate(img.corners, u1, v1);
                         const destTR = bilinearInterpolate(img.corners, u2, v1);
                         const destBR = bilinearInterpolate(img.corners, u2, v2);
                         const destBL = bilinearInterpolate(img.corners, u1, v2);
-                        
+
                         // Draw this segment as a transformed rectangle approximation
                         g.save();
-                        
+
                         // Set up clipping path for this segment
                         g.beginPath();
                         g.moveTo(destTL.x, destTL.y);
@@ -2108,50 +2147,152 @@
                         g.lineTo(destBL.x, destBL.y);
                         g.closePath();
                         g.clip();
-                        
+
                         // Calculate approximate transform for this segment
                         const centerDest = {
                             x: (destTL.x + destTR.x + destBR.x + destBL.x) / 4,
                             y: (destTL.y + destTR.y + destBR.y + destBL.y) / 4
                         };
-                        
+
                         // Calculate scale factors based on segment size
                         const destWidth = Math.abs(destTR.x - destTL.x);
                         const destHeight = Math.abs(destBL.y - destTL.y);
                         const scaleX = destWidth / sw;
                         const scaleY = destHeight / sh;
-                        
+
                         // Apply transformation
                         g.translate(centerDest.x, centerDest.y);
                         g.scale(scaleX, scaleY);
-                        
+
                         // Draw the image segment
                         g.drawImage(
                             img.element,
                             sx, sy, sw, sh,
                             -sw / 2, -sh / 2, sw, sh
                         );
-                        
+
                         g.restore();
                     }
                 }
             } catch (error) {
                 // Fallback: draw the image to fit the corner bounds
                 console.warn('Image warping failed, using fallback:', error);
-                
+
                 // Calculate bounding box of corners
                 const minX = Math.min(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
                 const maxX = Math.max(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
                 const minY = Math.min(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
                 const maxY = Math.max(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
-                
+
                 // Draw image to fit bounding box
                 g.drawImage(img.element, minX, minY, maxX - minX, maxY - minY);
             }
-            
+
             // Restore the context state
             g.restore();
         }
+
+        // Directional button controls for both panning and etch-a-sketch
+        function setupDirectionalControls() {
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                btn.addEventListener('click', (evt) => {
+                    const direction = evt.target.dataset.direction;
+                    handleDirectionalInput(direction);
+                });
+            });
+        }
+
+        function handleDirectionalInput(direction) {
+            if (etchActive) {
+                // Etch-a-sketch mode
+                const step = 1 / scale;
+                switch (direction) {
+                    case 'up': etchCursor.im += step; break;
+                    case 'down': etchCursor.im -= step; break;
+                    case 'left': etchCursor.re -= step; break;
+                    case 'right': etchCursor.re += step; break;
+                }
+
+                // Ensure we have an etch stroke initialized
+                let stroke = strokes[strokes.length - 1];
+                if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
+                    stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
+                    strokes.push(stroke);
+                    if (strokes.length > MAX_STROKES) strokes.shift();
+                }
+
+                // Append new point to stroke in pixel coordinates
+                stroke.pts.push(toCanvas(etchCursor, 'domain'));
+                stroke.imagePts.push(toCanvas(userFn(etchCursor), 'codomain'));
+                redrawAll();
+            } else {
+                // Panning mode
+                const panStep = scale * 0.2; // Pan by 20% of a grid unit
+
+                switch (direction) {
+                    case 'up':
+                        origin.domain.y += panStep;
+                        origin.codomain.y += panStep;
+                        break;
+                    case 'down':
+                        origin.domain.y -= panStep;
+                        origin.codomain.y -= panStep;
+                        break;
+                    case 'left':
+                        origin.domain.x += panStep;
+                        origin.codomain.x += panStep;
+                        break;
+                    case 'right':
+                        origin.domain.x -= panStep;
+                        origin.codomain.x -= panStep;
+                        break;
+                }
+
+                // Update all transformations when panning
+                updateAllTransformations();
+                redrawAll();
+            }
+        }
+
+        function updateAllTransformations() {
+            // Update stroke transformations (lines, circles, stars, spirals, etc.)
+            updateStrokeTransformations();
+
+            // Update text transformations
+            if (texts.length > 0) {
+                updateTextTransformations();
+            }
+
+            // Update image transformations
+            images.forEach(img => {
+                updateImageTransformation(img);
+            });
+
+            // Update dots (they need to be recalculated for the new view)
+            dots.forEach(dot => {
+                if (dot.label && dot.label.dom) {
+                    const z = dot.label.dom;
+                    const w = userFn(z);
+                    dot.label.cod = w;
+                }
+            });
+        }
+
+        function updateStrokeTransformations() {
+            // Recalculate image points for all strokes when function or view changes
+            strokes.forEach(stroke => {
+                if (stroke.pts && stroke.pts.length > 0) {
+                    stroke.imagePts = stroke.pts.map(pt => {
+                        const z = toComplex(pt.x, pt.y, stroke.canvas || 'domain');
+                        const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                        return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                    });
+                }
+            });
+        }
+
+        // Initialize directional controls
+        setupDirectionalControls();
     </script>
     <!-- Thank You Icon -->
     <div id="thankYouIcon"
