@@ -109,12 +109,32 @@
                 <option value="star">Star</option>
                 <option value="dot">Dot</option>
                 <option value="etch">Etch-a-Sketch</option>
-                <option value="chessboard">Chessboard</option>
+                <option value="chessboard">Integer Grid</option>
+                <option value="text">Text</option>
+                <option value="image">Image</option>
             </select>
         </label>
         <label id="paramLabel" style="display:none">
             Turns/Sides:
             <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:50px" />
+        </label>
+        <label id="textLabel" style="display:none">
+            Text:
+            <input type="text" id="textInput" value="Hello" placeholder="Enter text" style="width:80px" />
+            Size:
+            <input type="number" id="fontSizeInput" value="24" min="8" max="72" step="1" style="width:40px" />
+            Color:
+            <input type="color" id="fontColorInput" value="#ffffff" style="width:30px" />
+            Font:
+            <select id="fontFamilyInput" style="width:80px">
+                <option value="Arial">Arial</option>
+                <option value="Times">Times</option>
+                <option value="Courier">Courier</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Impact">Impact</option>
+                <option value="Comic Sans MS">Comic Sans</option>
+            </select>
         </label>
         <button id="clearBtn">Clear</button>
         <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
@@ -124,11 +144,11 @@
     </div>
     <div id="tooltip" class="tooltip" style="display:none;"></div>
     <div class="canvas-container">
-        <div class="canvas-label">Real Plane</div>
+        <div class="canvas-label">z plane</div>
         <canvas id="canvasDomain" class="domain"></canvas>
     </div>
     <div class="canvas-container">
-        <div class="canvas-label">Complex Plane</div>
+        <div class="canvas-label">w plane</div>
         <canvas id="canvasCodomain" class="codomain"></canvas>
     </div>
     <script>
@@ -138,13 +158,18 @@
         const toolSelect = document.getElementById('toolSelect');
         const paramLabel = document.getElementById('paramLabel');
         const paramInput = document.getElementById('paramInput');
+        const textLabel = document.getElementById('textLabel');
+        const textInput = document.getElementById('textInput');
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const fontColorInput = document.getElementById('fontColorInput');
+        const fontFamilyInput = document.getElementById('fontFamilyInput');
         const clearBtn = document.getElementById('clearBtn');
         const continuousToggle = document.getElementById('continuousToggle');
         const tooltip = document.getElementById('tooltip');
 
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
-        const MAX_STROKES = 6, strokes = [], dots = [];
+        const MAX_STROKES = 6, strokes = [], dots = [], texts = [], images = [];
 
         // Chessboard state
         let chessboard = null;
@@ -152,6 +177,46 @@
         let dragCornerIndex = -1;
         let isDraggingChessboard = false;
         let chessboardDragOffset = { x: 0, y: 0 };
+
+        // Text and image state
+        let pendingText = null;
+        let isDragOver = false;
+        let isDraggingImage = false;
+        let draggedImageIndex = -1;
+        let imageDragOffset = { x: 0, y: 0 };
+
+        // Text and image corner dragging state
+        let isDraggingTextCorner = false;
+        let draggedTextIndex = -1;
+        let draggedTextCornerIndex = -1;
+        let isDraggingText = false;
+        let textDragOffset = { x: 0, y: 0 };
+        let isDraggingImageCorner = false;
+        let draggedImageCornerIndex = -1;
+
+        // Modifier key state for different drag modes
+        let isShiftPressed = false;
+        let isCtrlPressed = false;
+
+        // Performance and quality optimization settings
+        const PERFORMANCE_SETTINGS = {
+            MAX_SAMPLE_DENSITY: 400, // Maximum samples per dimension
+            MIN_SAMPLE_STEP: 0.5,    // Minimum step size for high quality
+            CIRCLE_OVERLAP: 2.0,     // Circle size multiplier for better coverage
+            ALPHA_THRESHOLD: 25,     // Minimum alpha to process
+            QUALITY_LEVELS: {
+                LOW: { density: 0.3, overlap: 1.5 },
+                MEDIUM: { density: 0.6, overlap: 2.0 },
+                HIGH: { density: 1.0, overlap: 2.5 }
+            }
+        };
+
+        // Auto-adjust quality based on content size
+        function getQualityLevel(contentSize) {
+            if (contentSize < 5000) return PERFORMANCE_SETTINGS.QUALITY_LEVELS.HIGH;
+            if (contentSize < 20000) return PERFORMANCE_SETTINGS.QUALITY_LEVELS.MEDIUM;
+            return PERFORMANCE_SETTINGS.QUALITY_LEVELS.LOW;
+        }
 
         // Mathematical functions
         function getUserFunction() {
@@ -184,10 +249,10 @@
                 case 'sin': return z => {
                     const exp_iz = { re: -z.im, im: z.re };
                     const exp_neg_iz = { re: z.im, im: -z.re };
-                    const e1 = getUserFunction().exp ? getUserFunction().exp(exp_iz) : 
-                               { re: Math.exp(-z.im) * Math.cos(z.re), im: Math.exp(-z.im) * Math.sin(z.re) };
-                    const e2 = getUserFunction().exp ? getUserFunction().exp(exp_neg_iz) : 
-                               { re: Math.exp(z.im) * Math.cos(-z.re), im: Math.exp(z.im) * Math.sin(-z.re) };
+                    const e1 = getUserFunction().exp ? getUserFunction().exp(exp_iz) :
+                        { re: Math.exp(-z.im) * Math.cos(z.re), im: Math.exp(-z.im) * Math.sin(z.re) };
+                    const e2 = getUserFunction().exp ? getUserFunction().exp(exp_neg_iz) :
+                        { re: Math.exp(z.im) * Math.cos(-z.re), im: Math.exp(z.im) * Math.sin(-z.re) };
                     return { re: (e1.re - e2.re) / 2, im: (e1.im - e2.im) / 2 };
                 };
                 case 'cos': return z => {
@@ -267,7 +332,7 @@
                 };
             }
         }
-        
+
         function sqrtBranches(w) { const r = Math.hypot(w.re, w.im), t = Math.atan2(w.im, w.re), rr = Math.sqrt(r), ang = t / 2; return [{ re: rr * Math.cos(ang), im: rr * Math.sin(ang) }, { re: -rr * Math.cos(ang), im: -rr * Math.sin(ang) }]; }
         function chooseRoot(w) { const [r1, r2] = sqrtBranches(w); if (!prevInv) prevInv = r1; const d1 = (r1.re - prevInv.re) ** 2 + (r1.im - prevInv.im) ** 2, d2 = (r2.re - prevInv.re) ** 2 + (r2.im - prevInv.im) ** 2; prevInv = d1 < d2 ? r1 : r2; return prevInv; }
         function invFn(w) { return getInverseFunction()(w); }
@@ -278,23 +343,68 @@
         function resize() {
             // adjust scale based on zoom slider
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
-            scale = baseScale * zoomVal; canvases.domain.width = window.innerWidth / 2; canvases.domain.height = window.innerHeight; canvases.codomain.width = window.innerWidth / 2; canvases.codomain.height = window.innerHeight; origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 }; origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 }; redrawAll();
+            scale = baseScale * zoomVal;
+            canvases.domain.width = window.innerWidth / 2;
+            canvases.domain.height = window.innerHeight;
+            canvases.codomain.width = window.innerWidth / 2;
+            canvases.codomain.height = window.innerHeight;
+            origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
+            origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
+
+            // Update chessboard scale if it exists
+            if (chessboard && toolSelect.value === 'chessboard') {
+                updateChessboardScale();
+            }
+
+            redrawAll();
+        }
+
+        function updateChessboardScale() {
+            if (!chessboard) return;
+
+            const gridSize = chessboard.gridSize || 5;
+
+            // Always align to background grid lines
+            const snapX = Math.round(origin.domain.x / scale) * scale;
+            const snapY = Math.round(origin.domain.y / scale) * scale;
+            const extent = gridSize * scale;
+
+            // Update corners to match the new scale while staying aligned
+            chessboard.corners = [
+                { x: snapX - extent, y: snapY - extent }, // top-left
+                { x: snapX + extent, y: snapY - extent }, // top-right
+                { x: snapX + extent, y: snapY + extent }, // bottom-right
+                { x: snapX - extent, y: snapY + extent }  // bottom-left
+            ];
         }
         window.addEventListener('resize', resize);
         // zoom slider listener
         const zoomSlider = document.getElementById('zoomSlider');
         zoomSlider.addEventListener('input', resize);
 
-        toolSelect.addEventListener('change', () => { 
-            paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none'; 
+        // Update transformations when function changes
+        functionSelect.addEventListener('change', () => {
+            // Update all image transformations
+            images.forEach(img => updateImageTransformation(img));
+            // Update all text transformations
+            updateTextTransformations();
+            redrawAll();
+        });
+
+        toolSelect.addEventListener('change', () => {
+            paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
+            textLabel.style.display = (toolSelect.value === 'text') ? 'inline-block' : 'none';
             if (toolSelect.value === 'chessboard') {
                 initChessboard();
+            }
+            if (toolSelect.value === 'image') {
+                showImageInstructions();
             }
         });
 
         function drawGrid(key) {
             const c = canvases[key], g = ctx[key]; g.clearRect(0, 0, c.width, c.height);
-            
+
             // Draw main axes even in chessboard mode
             if (toolSelect.value === 'chessboard') {
                 g.strokeStyle = '#888'; g.lineWidth = 2;
@@ -302,7 +412,7 @@
                 g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
                 return;
             }
-            
+
             g.strokeStyle = '#444'; g.lineWidth = 1;
             for (let x = 0; x < c.width; x += scale) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, c.height); g.stroke(); }
             for (let y = 0; y < c.height; y += scale) { g.beginPath(); g.moveTo(0, y); g.lineTo(c.width, y); g.stroke(); }
@@ -311,35 +421,192 @@
             g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
         }
 
-        function redrawAll() { 
-            drawGrid('domain'); 
-            drawGrid('codomain'); 
-            
+        // Smooth rendering optimization
+        let renderQueued = false;
+        let lastRenderTime = 0;
+        const RENDER_THROTTLE = 16; // ~60fps
+
+        function queueRender() {
+            if (!renderQueued) {
+                renderQueued = true;
+                requestAnimationFrame(() => {
+                    const now = Date.now();
+                    if (now - lastRenderTime >= RENDER_THROTTLE) {
+                        redrawAll();
+                        lastRenderTime = now;
+                    }
+                    renderQueued = false;
+                });
+            }
+        }
+
+        // Use queued rendering for better performance
+        function optimizedRedraw() {
+            queueRender();
+        }
+
+        function redrawAll() {
+            drawGrid('domain');
+            drawGrid('codomain');
+
             // Draw chessboard if active
             if (chessboard && toolSelect.value === 'chessboard') {
                 drawChessboard();
             }
-            
-            strokes.forEach((s, i) => { 
+
+            strokes.forEach((s, i) => {
                 const alpha = i < strokes.length - MAX_STROKES ? 0.2 : 1, color = `hsla(${s.hue},70%,60%,${alpha})`;
-                ['domain', 'codomain'].forEach(key => { 
-                    const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key]; 
-                    g.strokeStyle = color; 
-                    g.lineWidth = 2; 
-                    drawShape(g, pts, s.mode); 
-                }); 
-            }); 
-            
-            dots.forEach(d => { 
-                ['domain', 'codomain'].forEach((key, idx) => { 
-                    const g = ctx[key], lab = (idx === 0 ? d.label.dom : invFn(d.label.dom)), p = (idx === 0 ? { x: d.x, y: d.y } : toCanvas(lab, key)); 
-                    g.fillStyle = 'yellow'; 
-                    g.beginPath(); 
-                    g.arc(p.x, p.y, 5, 0, 2 * Math.PI); 
-                    g.fill(); 
-                    g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`, p.x + 6, p.y - 6); 
-                }); 
-            }); 
+                ['domain', 'codomain'].forEach(key => {
+                    const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key];
+                    g.strokeStyle = color;
+                    g.lineWidth = 2;
+                    drawShape(g, pts, s.mode);
+                });
+            });
+
+            dots.forEach(d => {
+                ['domain', 'codomain'].forEach((key, idx) => {
+                    const g = ctx[key], lab = (idx === 0 ? d.label.dom : invFn(d.label.dom)), p = (idx === 0 ? { x: d.x, y: d.y } : toCanvas(lab, key));
+                    g.fillStyle = 'yellow';
+                    g.beginPath();
+                    g.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+                    g.fill();
+                    g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`, p.x + 6, p.y - 6);
+                });
+            });
+
+            // Draw texts with transformed font shapes
+            texts.forEach((t, index) => {
+                ['domain', 'codomain'].forEach(key => {
+                    const g = ctx[key];
+                    const isOriginal = key === t.canvas;
+
+                    if (isOriginal) {
+                        // Check if corners have been modified from original rectangle
+                        const originalHalfWidth = t.width / 2;
+                        const originalHalfHeight = t.height / 2;
+                        const originalCorners = [
+                            { x: t.x - originalHalfWidth, y: t.y - originalHalfHeight },
+                            { x: t.x + originalHalfWidth, y: t.y - originalHalfHeight },
+                            { x: t.x + originalHalfWidth, y: t.y + originalHalfHeight },
+                            { x: t.x - originalHalfWidth, y: t.y + originalHalfHeight }
+                        ];
+
+                        // Check if corners are still in original positions (within small tolerance)
+                        const tolerance = 2;
+                        const isRectangular = t.corners.every((corner, i) =>
+                            Math.abs(corner.x - originalCorners[i].x) < tolerance &&
+                            Math.abs(corner.y - originalCorners[i].y) < tolerance
+                        );
+
+                        // Check if text has been transformed (has transformedPoints on other canvas)
+                        const hasTransformation = t.transformedPoints && t.transformedPoints.length > 0;
+
+                        if (isRectangular && !hasTransformation) {
+                            // Draw original text normally only if not warped AND not transformed on other canvas
+                            g.font = `${t.fontSize}px ${t.fontFamily}`;
+                            g.fillStyle = t.color || '#fff';
+                            g.textAlign = 'center';
+                            g.textBaseline = 'middle';
+                            g.fillText(t.text, t.x, t.y);
+                        } else {
+                            // Draw warped text using point-based approach (no blur, just stretch)
+                            const pointsToRender = t.warpedPoints || [];
+                            pointsToRender.forEach(pt => {
+                                if (isFinite(pt.x) && isFinite(pt.y)) {
+                                    g.fillStyle = pt.color;
+                                    const size = pt.size || 3;
+                                    g.beginPath();
+                                    g.arc(pt.x, pt.y, size, 0, 2 * Math.PI);
+                                    g.fill();
+                                }
+                            });
+                        }
+
+                        // Draw border around text when in text mode
+                        if (toolSelect.value === 'text') {
+                            const minX = Math.min(t.corners[0].x, t.corners[1].x, t.corners[2].x, t.corners[3].x);
+                            const maxX = Math.max(t.corners[0].x, t.corners[1].x, t.corners[2].x, t.corners[3].x);
+                            const minY = Math.min(t.corners[0].y, t.corners[1].y, t.corners[2].y, t.corners[3].y);
+                            const maxY = Math.max(t.corners[0].y, t.corners[1].y, t.corners[2].y, t.corners[3].y);
+
+                            g.strokeStyle = '#00ff88';
+                            g.lineWidth = 2;
+                            g.strokeRect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
+
+                            // Draw corners when in text mode
+                            t.corners.forEach((corner, i) => {
+                                g.fillStyle = '#ff3333';
+                                g.beginPath();
+                                g.arc(corner.x, corner.y, 6, 0, 2 * Math.PI);
+                                g.fill();
+                                g.strokeStyle = '#fff';
+                                g.lineWidth = 2;
+                                g.stroke();
+                            });
+                        }
+                    } else if (t.transformedPoints) {
+                        // Draw transformed text without gaps
+                        drawTransformedText(g, t);
+                    }
+                });
+            });
+
+            // Draw images
+            images.forEach((img, index) => {
+                ['domain', 'codomain'].forEach(key => {
+                    const g = ctx[key];
+                    const isOriginal = key === img.canvas;
+
+                    if (isOriginal) {
+                        // Check if corners form a proper rectangle (not warped)
+                        const [tl, tr, br, bl] = img.corners;
+                        
+                        // Check if it's still a rectangle (parallel sides, right angles)
+                        const isRectangular = (
+                            Math.abs((tr.x - tl.x) - (br.x - bl.x)) < 5 && // Top and bottom sides parallel
+                            Math.abs((bl.y - tl.y) - (br.y - tr.y)) < 5 && // Left and right sides parallel
+                            Math.abs((tr.y - tl.y) - (br.y - bl.y)) < 5 && // Top and bottom same height difference
+                            Math.abs((bl.x - tl.x) - (br.x - tr.x)) < 5    // Left and right same width difference
+                        );
+
+                        if (isRectangular) {
+                            // Calculate bounding box of corners to fit image properly
+                            const minX = Math.min(tl.x, tr.x, br.x, bl.x);
+                            const maxX = Math.max(tl.x, tr.x, br.x, bl.x);
+                            const minY = Math.min(tl.y, tr.y, br.y, bl.y);
+                            const maxY = Math.max(tl.y, tr.y, br.y, bl.y);
+                            
+                            // Draw image to fit the rectangular bounds
+                            g.drawImage(img.element, minX, minY, maxX - minX, maxY - minY);
+                        } else {
+                            // Draw warped image using proper stretching/warping (no dots)
+                            drawWarpedImage(g, img);
+                        }
+
+                        // Draw border around image when in image mode
+                        if (toolSelect.value === 'image') {
+                            g.strokeStyle = '#00ff88';
+                            g.lineWidth = 2;
+                            g.strokeRect(img.x - img.width / 2 - 2, img.y - img.height / 2 - 2, img.width + 4, img.height + 4);
+
+                            // Draw corners when in image mode
+                            img.corners.forEach((corner, i) => {
+                                g.fillStyle = '#ff3333';
+                                g.beginPath();
+                                g.arc(corner.x, corner.y, 6, 0, 2 * Math.PI);
+                                g.fill();
+                                g.strokeStyle = '#fff';
+                                g.lineWidth = 2;
+                                g.stroke();
+                            });
+                        }
+                    } else if (img.transformedPoints) {
+                        // Draw transformed image without gaps
+                        drawTransformedImage(g, img);
+                    }
+                });
+            });
         }
 
         function drawShape(g, pts, mode) { if (!pts || pts.length < 2) return; g.beginPath(); g.moveTo(pts[0].x, pts[0].y); pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); }); if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath(); g.stroke(); }
@@ -350,16 +617,108 @@
                 case 'circle': { const cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, r = Math.hypot(dx, dy) / 2; for (let a = 0; a < 2 * Math.PI; a += 0.02) pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r }); pts.push(pts[0]); } break;
                 case 'polygon': { const sides = Math.max(3, parseInt(paramInput.value) || 5), ang0 = Math.atan2(dy, dx), rad = Math.hypot(dx, dy), verts = []; for (let i = 0; i < sides; i++) { const ang = ang0 + 2 * Math.PI * i / sides; verts.push({ x: A.x + Math.cos(ang) * rad, y: A.y + Math.sin(ang) * rad }); } verts.push(verts[0]); const sp = 50; for (let k = 0; k < verts.length - 1; k++) { const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y; for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t }); } } break;
                 case 'sine': { const w = Math.hypot(dx, dy), ux = dx / w, uy = dy / w, max = Math.hypot(canvases[activeCanvas].width, canvases[activeCanvas].height); for (let t = 0; t < max; t += 2) { const cx = A.x + ux * t, cy = A.y + uy * t, amp = w / 4, ph = 2 * Math.PI * t / w; pts.push({ x: cx - uy * amp * Math.sin(ph), y: cy + ux * amp * Math.sin(ph) }); } } break;
-                case 'spiral': { const turns = Math.max(1, parseInt(paramInput.value) || 3), base = Math.hypot(dx, dy), b = Math.log(1.618) / (Math.PI * 0.5), a0 = Math.atan2(dy, dx), maxT = turns * 2 * Math.PI; for (let th = 0; th <= maxT; th += 0.05) { const r = base * Math.exp(b * th); pts.push({ x: A.x + Math.cos(a0 + th) * r, y: A.y + Math.sin(a0 + th) * r }); } } break;
-                case 'star': { const n = Math.max(3, parseInt(paramInput.value) || 5), rad = Math.hypot(dx, dy), a0 = Math.atan2(dy, dx), verts = []; if (n % 2 === 0) { const h = n / 2, f = [], s = []; for (let i = 0; i < h; i++) { const a = a0 + 2 * Math.PI * i / h; f.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } for (let i = 0; i < h; i++) { const a = a0 + Math.PI / n + 2 * Math.PI * i / h; s.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } verts.push(...f, ...s, f[0]); } else { const skip = Math.floor(n / 2); for (let i = 0; i < n; i++) { const idx = (i * skip) % n, a = a0 + 2 * Math.PI * idx / n; verts.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } verts.push(verts[0]); } const sp = 50; for (let k = 0; k < verts.length - 1; k++) { const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y; for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t }); } } break;
+                case 'spiral': {
+                    const turns = Math.max(1, parseInt(paramInput.value) || 3);
+                    const scale = Math.hypot(dx, dy) / 100; // Use distance for scale only
+                    const b = Math.log(1.618) / (Math.PI * 0.5);
+                    const maxT = turns * 2 * Math.PI;
+
+                    for (let th = 0; th <= maxT; th += 0.05) {
+                        const r = scale * Math.exp(b * th);
+                        // Start spiral at angle 0 and always center at point A
+                        pts.push({ x: A.x + Math.cos(th) * r, y: A.y + Math.sin(th) * r });
+                    }
+                } break;
+                case 'star': {
+                    const n = Math.max(3, parseInt(paramInput.value) || 5), rad = Math.hypot(dx, dy), a0 = Math.atan2(dy, dx), verts = [];
+
+                    if (n === 6) {
+                        // Special case for 6-pointed star (Star of David)
+                        const outerRad = rad;
+                        const innerRad = rad * 0.58; // Better ratio for symmetry
+
+                        for (let i = 0; i < 12; i++) {
+                            const angle = a0 + (i * Math.PI / 6);
+                            const r = (i % 2 === 0) ? outerRad : innerRad;
+                            verts.push({ x: A.x + Math.cos(angle) * r, y: A.y + Math.sin(angle) * r });
+                        }
+                        verts.push(verts[0]);
+                    } else if (n % 2 === 0 && n !== 6) {
+                        const h = n / 2, f = [], s = [];
+                        for (let i = 0; i < h; i++) {
+                            const a = a0 + 2 * Math.PI * i / h;
+                            f.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                        }
+                        for (let i = 0; i < h; i++) {
+                            const a = a0 + Math.PI / n + 2 * Math.PI * i / h;
+                            s.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                        }
+                        verts.push(...f, ...s, f[0]);
+                    } else {
+                        const skip = Math.floor(n / 2);
+                        for (let i = 0; i < n; i++) {
+                            const idx = (i * skip) % n, a = a0 + 2 * Math.PI * idx / n;
+                            verts.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                        }
+                        verts.push(verts[0]);
+                    }
+
+                    const sp = 50;
+                    for (let k = 0; k < verts.length - 1; k++) {
+                        const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y;
+                        for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t });
+                    }
+                } break;
             } return pts;
         }
 
-        function startDraw(evt) { 
-            evt.preventDefault(); 
-            if (continuousToggle.checked) prevInv = null; 
-            const p = getPos(evt, activeCanvas); 
-            
+        function startDraw(evt) {
+            evt.preventDefault();
+            if (continuousToggle.checked) prevInv = null;
+            const p = getPos(evt, activeCanvas);
+
+            // Handle text corner dragging
+            if (toolSelect.value === 'text') {
+                const textCorner = findTextCornerAt(p.x, p.y, activeCanvas);
+                if (textCorner) {
+                    isDraggingTextCorner = true;
+                    draggedTextIndex = textCorner.textIndex;
+                    draggedTextCornerIndex = textCorner.cornerIndex;
+                    return;
+                }
+
+                // Handle text dragging (whole text)
+                const textIndex = getTextAt(p.x, p.y, activeCanvas);
+                if (textIndex !== -1) {
+                    isDraggingText = true;
+                    draggedTextIndex = textIndex;
+                    const text = texts[textIndex];
+                    textDragOffset = { x: p.x - text.x, y: p.y - text.y };
+                    return;
+                }
+            }
+
+            // Handle image corner dragging
+            if (toolSelect.value === 'image') {
+                const imageCorner = findImageCornerAt(p.x, p.y, activeCanvas);
+                if (imageCorner) {
+                    isDraggingImageCorner = true;
+                    draggedImageIndex = imageCorner.imageIndex;
+                    draggedImageCornerIndex = imageCorner.cornerIndex;
+                    return;
+                }
+
+                // Handle image dragging (whole image)
+                const imageIndex = getImageAt(p.x, p.y, activeCanvas);
+                if (imageIndex !== -1) {
+                    isDraggingImage = true;
+                    draggedImageIndex = imageIndex;
+                    const img = images[imageIndex];
+                    imageDragOffset = { x: p.x - img.x, y: p.y - img.y };
+                    return;
+                }
+            }
+
             // Handle chessboard corner dragging
             if (toolSelect.value === 'chessboard' && activeCanvas === 'domain') {
                 const cornerIndex = getCornerAt(p.x, p.y);
@@ -368,7 +727,7 @@
                     dragCornerIndex = cornerIndex;
                     return;
                 }
-                
+
                 // Check if clicking inside chessboard for dragging whole board
                 if (isInsideChessboard(p.x, p.y)) {
                     isDraggingChessboard = true;
@@ -377,21 +736,175 @@
                     return;
                 }
             }
-            
-            if (toolSelect.value === 'dot') { 
-                const z = toComplex(p.x, p.y, activeCanvas); 
-                dots.push({ canvas: activeCanvas, x: p.x, y: p.y, label: { dom: z } }); 
-                redrawAll(); 
-                return; 
-            } 
-            
-            isDrawing = true; 
-            startPt = p; 
-            currentPts = [p]; 
+
+            if (toolSelect.value === 'dot') {
+                const z = toComplex(p.x, p.y, activeCanvas);
+                dots.push({ canvas: activeCanvas, x: p.x, y: p.y, label: { dom: z } });
+                redrawAll();
+                return;
+            }
+
+            if (toolSelect.value === 'text') {
+                const text = textInput.value || 'Hello';
+                const fontSize = parseInt(fontSizeInput.value) || 24;
+                const color = fontColorInput.value || '#ffffff';
+                const fontFamily = fontFamilyInput.value || 'Arial';
+                addTransformableText(text, p.x, p.y, activeCanvas, fontSize, color, fontFamily);
+                return;
+            }
+
+            if (toolSelect.value === 'image') {
+                // Image mode is handled by drag and drop
+                return;
+            }
+
+            isDrawing = true;
+            startPt = p;
+            currentPts = [p];
         }
-        function moveDraw(evt) { 
+        function moveDraw(evt) {
             const p = getPos(evt, activeCanvas);
-            
+
+            // Handle text corner dragging with different modes
+            if (isDraggingTextCorner && draggedTextIndex !== -1 && draggedTextCornerIndex !== -1) {
+                evt.preventDefault();
+                const text = texts[draggedTextIndex];
+
+                if (isShiftPressed) {
+                    // SHIFT: Free warping - move only the selected corner
+                    text.corners[draggedTextCornerIndex] = p;
+                } else if (isCtrlPressed) {
+                    // CTRL: Proportional scaling from center
+                    const center = { x: text.x, y: text.y };
+                    const cornerIndex = draggedTextCornerIndex;
+                    const dx = p.x - center.x;
+                    const dy = p.y - center.y;
+                    const distance = Math.hypot(dx, dy);
+                    const originalCorner = text.corners[cornerIndex];
+                    const originalDistance = Math.hypot(originalCorner.x - center.x, originalCorner.y - center.y);
+                    const scale = distance / originalDistance;
+
+                    // Scale all corners proportionally from center
+                    text.corners.forEach((corner, i) => {
+                        const relX = corner.x - center.x;
+                        const relY = corner.y - center.y;
+                        text.corners[i] = {
+                            x: center.x + relX * scale,
+                            y: center.y + relY * scale
+                        };
+                    });
+                } else {
+                    // Normal: Resize maintaining rectangle shape
+                    const center = { x: text.x, y: text.y };
+                    const cornerIndex = draggedTextCornerIndex;
+                    const dx = Math.abs(p.x - center.x) * 2;
+                    const dy = Math.abs(p.y - center.y) * 2;
+
+                    // Update all corners to maintain rectangle
+                    text.corners = [
+                        { x: center.x - dx / 2, y: center.y - dy / 2 }, // top-left
+                        { x: center.x + dx / 2, y: center.y - dy / 2 }, // top-right
+                        { x: center.x + dx / 2, y: center.y + dy / 2 }, // bottom-right
+                        { x: center.x - dx / 2, y: center.y + dy / 2 }  // bottom-left
+                    ];
+                }
+
+                updateTextFromCorners(draggedTextIndex);
+                redrawAll();
+                return;
+            }
+
+            // Handle text dragging
+            if (isDraggingText && draggedTextIndex !== -1) {
+                evt.preventDefault();
+                const text = texts[draggedTextIndex];
+                const dx = p.x - textDragOffset.x - text.x;
+                const dy = p.y - textDragOffset.y - text.y;
+
+                // Move all corners by the same offset
+                text.corners.forEach(corner => {
+                    corner.x += dx;
+                    corner.y += dy;
+                });
+
+                text.x = p.x - textDragOffset.x;
+                text.y = p.y - textDragOffset.y;
+                text.canvas = activeCanvas; // Allow moving between canvases
+                updateTextTransformations();
+                redrawAll();
+                return;
+            }
+
+            // Handle image corner dragging with different modes
+            if (isDraggingImageCorner && draggedImageIndex !== -1 && draggedImageCornerIndex !== -1) {
+                evt.preventDefault();
+                const img = images[draggedImageIndex];
+
+                if (isShiftPressed) {
+                    // SHIFT: Free warping - move only the selected corner
+                    img.corners[draggedImageCornerIndex] = p;
+                } else if (isCtrlPressed) {
+                    // CTRL: Proportional scaling from center
+                    const center = { x: img.x, y: img.y };
+                    const cornerIndex = draggedImageCornerIndex;
+                    const dx = p.x - center.x;
+                    const dy = p.y - center.y;
+                    const distance = Math.hypot(dx, dy);
+                    const originalCorner = img.corners[cornerIndex];
+                    const originalDistance = Math.hypot(originalCorner.x - center.x, originalCorner.y - center.y);
+                    const scale = distance / originalDistance;
+
+                    // Scale all corners proportionally from center
+                    img.corners.forEach((corner, i) => {
+                        const relX = corner.x - center.x;
+                        const relY = corner.y - center.y;
+                        img.corners[i] = {
+                            x: center.x + relX * scale,
+                            y: center.y + relY * scale
+                        };
+                    });
+                } else {
+                    // Normal: Resize maintaining rectangle shape
+                    const center = { x: img.x, y: img.y };
+                    const cornerIndex = draggedImageCornerIndex;
+                    const dx = Math.abs(p.x - center.x) * 2;
+                    const dy = Math.abs(p.y - center.y) * 2;
+
+                    // Update all corners to maintain rectangle
+                    img.corners = [
+                        { x: center.x - dx / 2, y: center.y - dy / 2 }, // top-left
+                        { x: center.x + dx / 2, y: center.y - dy / 2 }, // top-right
+                        { x: center.x + dx / 2, y: center.y + dy / 2 }, // bottom-right
+                        { x: center.x - dx / 2, y: center.y + dy / 2 }  // bottom-left
+                    ];
+                }
+
+                updateImageFromCorners(draggedImageIndex);
+                redrawAll();
+                return;
+            }
+
+            // Handle image dragging
+            if (isDraggingImage && draggedImageIndex !== -1) {
+                evt.preventDefault();
+                const img = images[draggedImageIndex];
+                const dx = p.x - imageDragOffset.x - img.x;
+                const dy = p.y - imageDragOffset.y - img.y;
+
+                // Move all corners by the same offset
+                img.corners.forEach(corner => {
+                    corner.x += dx;
+                    corner.y += dy;
+                });
+
+                img.x = p.x - imageDragOffset.x;
+                img.y = p.y - imageDragOffset.y;
+                img.canvas = activeCanvas; // Allow moving between canvases
+                updateImageTransformation(img);
+                redrawAll();
+                return;
+            }
+
             // Handle chessboard corner dragging
             if (isDraggingCorner && dragCornerIndex !== -1 && activeCanvas === 'domain') {
                 evt.preventDefault();
@@ -399,7 +912,7 @@
                 redrawAll();
                 return;
             }
-            
+
             // Handle chessboard whole board dragging
             if (isDraggingChessboard && activeCanvas === 'domain') {
                 evt.preventDefault();
@@ -408,68 +921,237 @@
                 redrawAll();
                 return;
             }
-            
-            if (!isDrawing) return; 
-            const tool = toolSelect.value; 
-            
-            if (tool === 'freehand') { 
-                evt.preventDefault(); 
-                currentPts.push(p); 
+
+            if (!isDrawing) return;
+            const tool = toolSelect.value;
+
+            if (tool === 'freehand') {
+                evt.preventDefault();
+                currentPts.push(p);
                 redrawAll();
-                ['domain', 'codomain'].forEach(key => { 
-                    const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key)); 
-                    ctx[key].strokeStyle = '#fff'; 
-                    ctx[key].lineWidth = 2; 
-                    drawShape(ctx[key], pts, 'freehand'); 
-                }); 
-            } else if (tool !== 'dot' && tool !== 'chessboard') { 
-                evt.preventDefault(); 
-                const pts = computePts(tool, startPt, p); 
-                const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain')); 
+                ['domain', 'codomain'].forEach(key => {
+                    const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key));
+                    ctx[key].strokeStyle = '#fff';
+                    ctx[key].lineWidth = 2;
+                    drawShape(ctx[key], pts, 'freehand');
+                });
+            } else if (tool !== 'dot' && tool !== 'chessboard') {
+                evt.preventDefault();
+                const pts = computePts(tool, startPt, p);
+                const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
                 redrawAll();
-                ['domain', 'codomain'].forEach(key => { 
-                    const pts2 = key === activeCanvas ? pts : img; 
-                    ctx[key].strokeStyle = '#fff'; 
-                    ctx[key].lineWidth = 2; 
-                    drawShape(ctx[key], pts2, tool); 
-                }); 
-            } 
+                ['domain', 'codomain'].forEach(key => {
+                    const pts2 = key === activeCanvas ? pts : img;
+                    ctx[key].strokeStyle = '#fff';
+                    ctx[key].lineWidth = 2;
+                    drawShape(ctx[key], pts2, tool);
+                });
+            }
         }
-        function endDraw(evt) { 
+        function endDraw(evt) {
+            // Handle text corner dragging end
+            if (isDraggingTextCorner) {
+                isDraggingTextCorner = false;
+                draggedTextIndex = -1;
+                draggedTextCornerIndex = -1;
+                return;
+            }
+
+            // Handle text dragging end
+            if (isDraggingText) {
+                isDraggingText = false;
+                draggedTextIndex = -1;
+                return;
+            }
+
+            // Handle image corner dragging end
+            if (isDraggingImageCorner) {
+                isDraggingImageCorner = false;
+                draggedImageIndex = -1;
+                draggedImageCornerIndex = -1;
+                return;
+            }
+
+            // Handle image dragging end
+            if (isDraggingImage) {
+                isDraggingImage = false;
+                draggedImageIndex = -1;
+                return;
+            }
+
             // Handle chessboard corner dragging end
             if (isDraggingCorner) {
                 isDraggingCorner = false;
                 dragCornerIndex = -1;
                 return;
             }
-            
+
             // Handle chessboard whole board dragging end
             if (isDraggingChessboard) {
                 isDraggingChessboard = false;
                 return;
             }
-            
-            if (!isDrawing) return; 
-            evt.preventDefault(); 
-            isDrawing = false; 
-            const tool = toolSelect.value; 
-            if (tool === 'dot' || tool === 'chessboard') return; 
-            const ePt = getPos(evt, activeCanvas); 
-            const pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt); 
-            const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain')); 
-            strokes.push({ canvas: activeCanvas, mode: tool, pts: pts, imagePts: img, hue: Math.random() * 360 }); 
-            if (strokes.length > MAX_STROKES) strokes.shift(); 
-            redrawAll(); 
+
+            if (!isDrawing) return;
+            evt.preventDefault();
+            isDrawing = false;
+            const tool = toolSelect.value;
+            if (tool === 'dot' || tool === 'chessboard') return;
+            const ePt = getPos(evt, activeCanvas);
+            const pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt);
+            const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
+            strokes.push({ canvas: activeCanvas, mode: tool, pts: pts, imagePts: img, hue: Math.random() * 360 });
+            if (strokes.length > MAX_STROKES) strokes.shift();
+            redrawAll();
         }
         function getPos(evt, key) { const r = canvases[key].getBoundingClientRect(), t = evt.touches ? evt.touches[0] : null; return { x: (t ? t.clientX : evt.clientX) - r.left, y: (t ? t.clientY : evt.clientY) - r.top }; }
+
+        // Helper function to check if point is near a corner
+        function isNearCorner(point, corner, threshold = 10) {
+            const dx = point.x - corner.x;
+            const dy = point.y - corner.y;
+            return Math.sqrt(dx * dx + dy * dy) < threshold;
+        }
+
+        // Helper function to find text corner at point
+        function findTextCornerAt(x, y, canvas) {
+            for (let i = 0; i < texts.length; i++) {
+                const text = texts[i];
+                if (text.canvas !== canvas) continue;
+
+                for (let j = 0; j < text.corners.length; j++) {
+                    if (isNearCorner({ x, y }, text.corners[j], 12)) {
+                        return { textIndex: i, cornerIndex: j };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Helper function to find image corner at point
+        function findImageCornerAt(x, y, canvas) {
+            for (let i = 0; i < images.length; i++) {
+                const img = images[i];
+                if (img.canvas !== canvas) continue;
+
+                for (let j = 0; j < img.corners.length; j++) {
+                    if (isNearCorner({ x, y }, img.corners[j], 12)) {
+                        return { imageIndex: i, cornerIndex: j };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Helper function to get image at point
+        function getImageAt(x, y, canvas) {
+            for (let i = images.length - 1; i >= 0; i--) {
+                const img = images[i];
+                if (img.canvas === canvas) {
+                    // Check if point is inside image bounds (simplified bounding box check)
+                    const minX = Math.min(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
+                    const maxX = Math.max(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
+                    const minY = Math.min(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
+                    const maxY = Math.max(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
+
+                    if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+
+        // Helper function to get text at point
+        function getTextAt(x, y, canvas) {
+            for (let i = texts.length - 1; i >= 0; i--) {
+                const text = texts[i];
+                if (text.canvas === canvas) {
+                    // Check if point is inside text bounds (simplified bounding box check)
+                    const minX = Math.min(text.corners[0].x, text.corners[1].x, text.corners[2].x, text.corners[3].x);
+                    const maxX = Math.max(text.corners[0].x, text.corners[1].x, text.corners[2].x, text.corners[3].x);
+                    const minY = Math.min(text.corners[0].y, text.corners[1].y, text.corners[2].y, text.corners[3].y);
+                    const maxY = Math.max(text.corners[0].y, text.corners[1].y, text.corners[2].y, text.corners[3].y);
+
+                    if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
 
         ['mousedown', 'touchstart'].forEach(e => { canvases.domain.addEventListener(e, () => activeCanvas = 'domain'); canvases.codomain.addEventListener(e, () => activeCanvas = 'codomain'); canvases.domain.addEventListener(e, startDraw); canvases.codomain.addEventListener(e, startDraw); });
         ['mousemove', 'touchmove'].forEach(e => { canvases.domain.addEventListener(e, moveDraw); canvases.codomain.addEventListener(e, moveDraw); });
         ['mouseup', 'touchend', 'mouseleave', 'touchcancel'].forEach(e => window.addEventListener(e, endDraw));
-        canvases.domain.addEventListener('mousemove', evt => { const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain'); if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; } tooltip.style.display = 'block'; tooltip.textContent = `x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`; tooltip.style.left = evt.clientX + 10 + 'px'; tooltip.style.top = evt.clientY + 10 + 'px'; });
-        canvases.codomain.addEventListener('mousemove', evt => { const p = getPos(evt, 'codomain'), w = toComplex(p.x, p.y, 'codomain'); if (w.re == null || w.im == null) { tooltip.style.display = 'none'; return; } tooltip.style.display = 'block'; tooltip.textContent = `Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`; tooltip.style.left = evt.clientX + 10 + 'px'; tooltip.style.top = evt.clientY + 10 + 'px'; });
+        canvases.domain.addEventListener('mousemove', evt => {
+            const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain');
+            if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; }
+            tooltip.style.display = 'block';
+            tooltip.textContent = `x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`;
+            tooltip.style.left = evt.clientX + 10 + 'px';
+            tooltip.style.top = evt.clientY + 10 + 'px';
+
+            // Change cursor based on what's under the mouse
+            let cursor = 'crosshair';
+
+            if (toolSelect.value === 'text') {
+                if (findTextCornerAt(p.x, p.y, 'domain')) {
+                    cursor = 'nw-resize';
+                } else if (getTextAt(p.x, p.y, 'domain') !== -1) {
+                    cursor = 'move';
+                }
+            } else if (toolSelect.value === 'image') {
+                if (findImageCornerAt(p.x, p.y, 'domain')) {
+                    cursor = 'nw-resize';
+                } else if (getImageAt(p.x, p.y, 'domain') !== -1) {
+                    cursor = 'move';
+                }
+            }
+
+            canvases.domain.style.cursor = cursor;
+        });
+        canvases.codomain.addEventListener('mousemove', evt => {
+            const p = getPos(evt, 'codomain'), w = toComplex(p.x, p.y, 'codomain');
+            if (w.re == null || w.im == null) { tooltip.style.display = 'none'; return; }
+            tooltip.style.display = 'block';
+            tooltip.textContent = `Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`;
+            tooltip.style.left = evt.clientX + 10 + 'px';
+            tooltip.style.top = evt.clientY + 10 + 'px';
+
+            // Change cursor based on what's under the mouse
+            let cursor = 'crosshair';
+
+            if (toolSelect.value === 'text') {
+                if (findTextCornerAt(p.x, p.y, 'codomain')) {
+                    cursor = 'nw-resize';
+                } else if (getTextAt(p.x, p.y, 'codomain') !== -1) {
+                    cursor = 'move';
+                }
+            } else if (toolSelect.value === 'image') {
+                if (findImageCornerAt(p.x, p.y, 'codomain')) {
+                    cursor = 'nw-resize';
+                } else if (getImageAt(p.x, p.y, 'codomain') !== -1) {
+                    cursor = 'move';
+                }
+            }
+
+            canvases.codomain.style.cursor = cursor;
+        });
         canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
-        clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; redrawAll(); });
+        clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; texts.length = 0; images.length = 0; redrawAll(); });
+
+        // Track modifier keys for different drag modes
+        window.addEventListener('keydown', (evt) => {
+            if (evt.key === 'Shift') isShiftPressed = true;
+            if (evt.key === 'Control') isCtrlPressed = true;
+        });
+
+        window.addEventListener('keyup', (evt) => {
+            if (evt.key === 'Shift') isShiftPressed = false;
+            if (evt.key === 'Control') isCtrlPressed = false;
+        });
+
         resize();
 
         // Etch-a-Sketch state
@@ -514,19 +1196,28 @@
             evt.preventDefault();
         });
 
-        // Chessboard functions
+        // Integer Grid functions (formerly chessboard)
         function initChessboard() {
-            const size = Math.min(canvases.domain.width, canvases.domain.height) * 0.3;
-            const centerX = canvases.domain.width / 2;
-            const centerY = canvases.domain.height / 2;
-            const halfSize = size / 2;
-            
+            // Create a grid that aligns with background grid lines
+            // Always align to the nearest grid lines regardless of scale
+            const gridSize = 5; // Units from center
+            const centerX = origin.domain.x; // Use actual origin, not canvas center
+            const centerY = origin.domain.y;
+
+            // Snap to background grid lines - round to nearest scale unit
+            const snapX = Math.round(centerX / scale) * scale;
+            const snapY = Math.round(centerY / scale) * scale;
+
+            // Calculate grid extent in canvas coordinates aligned to background grid
+            const extent = gridSize * scale;
+
             chessboard = {
+                gridSize: gridSize, // Number of units from center
                 corners: [
-                    { x: centerX - halfSize, y: centerY - halfSize }, // top-left
-                    { x: centerX + halfSize, y: centerY - halfSize }, // top-right
-                    { x: centerX + halfSize, y: centerY + halfSize }, // bottom-right
-                    { x: centerX - halfSize, y: centerY + halfSize }  // bottom-left
+                    { x: snapX - extent, y: snapY - extent }, // top-left (-5, +5i)
+                    { x: snapX + extent, y: snapY - extent }, // top-right (+5, +5i)
+                    { x: snapX + extent, y: snapY + extent }, // bottom-right (+5, -5i)
+                    { x: snapX - extent, y: snapY + extent }  // bottom-left (-5, -5i)
                 ]
             };
             redrawAll();
@@ -534,27 +1225,29 @@
 
         function bilinearInterpolate(corners, u, v) {
             // Bilinear interpolation between four corners
-            const x1 = (1 - u) * (1 - v) * corners[0].x + u * (1 - v) * corners[1].x + 
-                       u * v * corners[2].x + (1 - u) * v * corners[3].x;
-            const y1 = (1 - u) * (1 - v) * corners[0].y + u * (1 - v) * corners[1].y + 
-                       u * v * corners[2].y + (1 - u) * v * corners[3].y;
+            const x1 = (1 - u) * (1 - v) * corners[0].x + u * (1 - v) * corners[1].x +
+                u * v * corners[2].x + (1 - u) * v * corners[3].x;
+            const y1 = (1 - u) * (1 - v) * corners[0].y + u * (1 - v) * corners[1].y +
+                u * v * corners[2].y + (1 - u) * v * corners[3].y;
             return { x: x1, y: y1 };
         }
 
         function drawChessboard() {
             if (!chessboard) return;
-            
+
             const g = ctx.domain;
             const gc = ctx.codomain;
-            
-            // Draw grid lines with better sampling
-            for (let i = 0; i <= 8; i++) {
-                // Horizontal lines
+            const gridSize = chessboard.gridSize || 5;
+            const numLines = gridSize * 2 + 1; // Lines from -gridSize to +gridSize
+
+            // Draw grid lines with integer alignment
+            for (let i = 0; i < numLines; i++) {
+                // Horizontal lines (constant imaginary part)
                 const hPts = [];
                 const hImagePts = [];
-                for (let k = 0; k <= 80; k++) { // Increased resolution
-                    const u = k / 80;
-                    const v = i / 8;
+                for (let k = 0; k <= 80; k++) { // High resolution for smooth curves
+                    const u = k / 80; // 0 to 1 across the grid
+                    const v = i / (numLines - 1); // 0 to 1 down the grid
                     const pt = bilinearInterpolate(chessboard.corners, u, v);
                     hPts.push(pt);
                     const z = toComplex(pt.x, pt.y, 'domain');
@@ -563,21 +1256,21 @@
                         hImagePts.push(toCanvas(w, 'codomain'));
                     }
                 }
-                
+
                 // Draw horizontal line on domain
-                g.strokeStyle = '#00ff88';
-                g.lineWidth = 2;
+                g.strokeStyle = i === gridSize ? '#ffffff' : '#00ff88'; // Center line in white
+                g.lineWidth = i === gridSize ? 3 : 2;
                 g.beginPath();
                 if (hPts.length > 0) {
                     g.moveTo(hPts[0].x, hPts[0].y);
                     hPts.forEach(p => g.lineTo(p.x, p.y));
                     g.stroke();
                 }
-                
+
                 // Draw transformed horizontal line on codomain
                 if (hImagePts.length > 1) {
-                    gc.strokeStyle = '#00ff88';
-                    gc.lineWidth = 2;
+                    gc.strokeStyle = i === gridSize ? '#ffffff' : '#00ff88';
+                    gc.lineWidth = i === gridSize ? 3 : 2;
                     gc.beginPath();
                     gc.moveTo(hImagePts[0].x, hImagePts[0].y);
                     hImagePts.forEach(p => {
@@ -587,13 +1280,13 @@
                     });
                     gc.stroke();
                 }
-                
-                // Vertical lines
+
+                // Vertical lines (constant real part)
                 const vPts = [];
                 const vImagePts = [];
-                for (let k = 0; k <= 80; k++) { // Increased resolution
-                    const u = i / 8;
-                    const v = k / 80;
+                for (let k = 0; k <= 80; k++) { // High resolution for smooth curves
+                    const u = i / (numLines - 1); // 0 to 1 across the grid
+                    const v = k / 80; // 0 to 1 down the grid
                     const pt = bilinearInterpolate(chessboard.corners, u, v);
                     vPts.push(pt);
                     const z = toComplex(pt.x, pt.y, 'domain');
@@ -602,21 +1295,21 @@
                         vImagePts.push(toCanvas(w, 'codomain'));
                     }
                 }
-                
+
                 // Draw vertical line on domain
-                g.strokeStyle = '#00ff88';
-                g.lineWidth = 2;
+                g.strokeStyle = i === gridSize ? '#ffffff' : '#00ff88'; // Center line in white
+                g.lineWidth = i === gridSize ? 3 : 2;
                 g.beginPath();
                 if (vPts.length > 0) {
                     g.moveTo(vPts[0].x, vPts[0].y);
                     vPts.forEach(p => g.lineTo(p.x, p.y));
                     g.stroke();
                 }
-                
+
                 // Draw transformed vertical line on codomain
                 if (vImagePts.length > 1) {
-                    gc.strokeStyle = '#00ff88';
-                    gc.lineWidth = 2;
+                    gc.strokeStyle = i === gridSize ? '#ffffff' : '#00ff88';
+                    gc.lineWidth = i === gridSize ? 3 : 2;
                     gc.beginPath();
                     gc.moveTo(vImagePts[0].x, vImagePts[0].y);
                     vImagePts.forEach(p => {
@@ -627,7 +1320,7 @@
                     gc.stroke();
                 }
             }
-            
+
             // Draw corner handles
             chessboard.corners.forEach((corner, i) => {
                 g.fillStyle = '#ff3333';
@@ -638,6 +1331,61 @@
                 g.lineWidth = 2;
                 g.stroke();
             });
+
+            // Draw grid coordinate labels on corners
+            g.fillStyle = '#ffffff';
+            g.font = '14px Arial';
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+
+            const labels = [
+                `${-gridSize} + ${gridSize}i`, // top-left
+                `${gridSize} + ${gridSize}i`,  // top-right  
+                `${gridSize} - ${gridSize}i`,  // bottom-right
+                `${-gridSize} - ${gridSize}i`  // bottom-left
+            ];
+
+            chessboard.corners.forEach((corner, i) => {
+                const offsetX = i === 0 || i === 3 ? -60 : 60; // Left corners: left offset, right corners: right offset
+                const offsetY = i === 0 || i === 1 ? -20 : 20;  // Top corners: up offset, bottom corners: down offset
+                g.fillText(labels[i], corner.x + offsetX, corner.y + offsetY);
+            });
+
+            // Draw integer coordinate markers along the axes for better reference
+            g.fillStyle = '#aaaaaa';
+            g.font = '12px Arial';
+            g.textAlign = 'center';
+            g.textBaseline = 'top';
+
+            // Real axis labels (along horizontal center line) with scale information
+            const centerY = origin.domain.y; // Use actual origin Y
+            for (let i = -gridSize; i <= gridSize; i++) {
+                if (i === 0) continue; // Skip origin
+                const x = origin.domain.x + i * scale;
+                if (x >= 0 && x <= canvases.domain.width) {
+                    g.fillText(i.toString(), x, centerY + 15);
+                }
+            }
+
+            // Add scale indicator on x-axis
+            g.fillStyle = '#ffffff';
+            g.font = 'bold 14px Arial';
+            g.textAlign = 'right';
+            g.fillText(`Scale: 1 unit = ${scale}px`, canvases.domain.width - 10, centerY + 35);
+
+            // Imaginary axis labels (along vertical center line) 
+            g.fillStyle = '#aaaaaa';
+            g.font = '12px Arial';
+            g.textAlign = 'left';
+            g.textBaseline = 'middle';
+            const centerX = origin.domain.x; // Use actual origin X
+            for (let i = -gridSize; i <= gridSize; i++) {
+                if (i === 0) continue; // Skip origin
+                const y = origin.domain.y - i * scale;
+                if (y >= 0 && y <= canvases.domain.height) {
+                    g.fillText(i > 0 ? `${i}i` : `${i}i`, centerX + 15, y);
+                }
+            }
         }
 
         function getCornerAt(x, y) {
@@ -661,14 +1409,21 @@
 
         function moveChessboard(newCenter) {
             if (!chessboard) return;
-            const currentCenter = getChessboardCenter();
-            const dx = newCenter.x - currentCenter.x;
-            const dy = newCenter.y - currentCenter.y;
-            
-            chessboard.corners.forEach(corner => {
-                corner.x += dx;
-                corner.y += dy;
-            });
+
+            // Snap new center to background grid alignment
+            const snapX = Math.round(newCenter.x / scale) * scale;
+            const snapY = Math.round(newCenter.y / scale) * scale;
+
+            const gridSize = chessboard.gridSize || 5;
+            const extent = gridSize * scale;
+
+            // Update corners to maintain grid alignment
+            chessboard.corners = [
+                { x: snapX - extent, y: snapY - extent },
+                { x: snapX + extent, y: snapY - extent },
+                { x: snapX + extent, y: snapY + extent },
+                { x: snapX - extent, y: snapY + extent }
+            ];
         }
 
         function isInsideChessboard(x, y) {
@@ -679,8 +1434,582 @@
             const maxX = Math.max(...corners.map(c => c.x));
             const minY = Math.min(...corners.map(c => c.y));
             const maxY = Math.max(...corners.map(c => c.y));
-            
+
             return x >= minX && x <= maxX && y >= minY && y <= maxY;
+        }
+
+        // Text and Image functions
+        function addTransformableText(text, x, y, canvas, fontSize, color, fontFamily = 'Arial') {
+            // Create a temporary canvas to measure text dimensions
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.font = `${fontSize}px ${fontFamily}`;
+            const metrics = tempCtx.measureText(text);
+            const textWidth = metrics.width;
+            const textHeight = fontSize; // Approximate height
+
+            // Center the text at the click position
+            const halfWidth = textWidth / 2;
+            const halfHeight = textHeight / 2;
+
+            texts.push({
+                text: text,
+                canvas: canvas,
+                transformedPoints: [], // Will be filled by updateTextTransformations
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                color: color,
+                x: x,
+                y: y,
+                width: textWidth,
+                height: textHeight,
+                corners: [
+                    { x: x - halfWidth, y: y - halfHeight }, // Top-left
+                    { x: x + halfWidth, y: y - halfHeight }, // Top-right
+                    { x: x + halfWidth, y: y + halfHeight }, // Bottom-right
+                    { x: x - halfWidth, y: y + halfHeight } // Bottom-left
+                ]
+            });
+
+            updateTextTransformations();
+            redrawAll();
+        }
+
+        function updateTextTransformations() {
+            texts.forEach(t => {
+                // Create a smaller temporary canvas to sample the text
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // Set reasonable canvas size based on text
+                tempCtx.font = `${t.fontSize}px ${t.fontFamily}`;
+                const textMetrics = tempCtx.measureText(t.text);
+                const textWidth = Math.ceil(textMetrics.width + 20);
+                const textHeight = Math.ceil(t.fontSize * 1.5);
+
+                tempCanvas.width = textWidth;
+                tempCanvas.height = textHeight;
+
+                // Render the text to sample from
+                tempCtx.font = `${t.fontSize}px ${t.fontFamily}`;
+                tempCtx.fillStyle = t.color;
+                tempCtx.textAlign = 'center';
+                tempCtx.textBaseline = 'middle';
+                tempCtx.fillText(t.text, textWidth / 2, textHeight / 2);
+
+                // Get image data
+                const sourceImageData = tempCtx.getImageData(0, 0, textWidth, textHeight);
+                const sourceData = sourceImageData.data;
+
+                // Sample with adaptive density and quality optimization
+                const transformedPoints = [];
+                const warpedPoints = []; // For the original canvas when warped
+
+                // Calculate optimal sample step based on content size and quality
+                const contentSize = textWidth * textHeight;
+                const quality = getQualityLevel(contentSize);
+                const baseSampleStep = Math.max(PERFORMANCE_SETTINGS.MIN_SAMPLE_STEP, Math.floor(t.fontSize / 20));
+                const sampleStep = Math.max(1, baseSampleStep / quality.density);
+
+                // For transformed points (right side), use 20x higher resolution for ultra-smooth text
+                const transformedSampleStep = Math.max(1, sampleStep / 20);
+
+                for (let py = 0; py < textHeight; py += sampleStep) {
+                    for (let px = 0; px < textWidth; px += sampleStep) {
+                        const pixelIndex = (py * textWidth + px) * 4;
+                        const alpha = sourceData[pixelIndex + 3];
+
+                        if (alpha > 25) {
+                            // Convert from temp canvas to normalized coordinates (0-1)
+                            const u = px / textWidth;
+                            const v = py / textHeight;
+
+                            // Use bilinear interpolation with corners to get world position
+                            const worldPos = bilinearInterpolate(t.corners, u, v);
+
+                            // Store warped points for original canvas
+                            const r = sourceData[pixelIndex];
+                            const g = sourceData[pixelIndex + 1];
+                            const b = sourceData[pixelIndex + 2];
+
+                            warpedPoints.push({
+                                x: worldPos.x,
+                                y: worldPos.y,
+                                color: `rgba(${r},${g},${b},0.6)`, // Semi-transparent for overlapping
+                                size: sampleStep * 4.0 // Much larger circles to fill gaps
+                            });
+                        }
+                    }
+                }
+
+                // Generate higher resolution points for transformation (3x resolution)
+                for (let py = 0; py < textHeight; py += transformedSampleStep) {
+                    for (let px = 0; px < textWidth; px += transformedSampleStep) {
+                        const pixelIndex = (py * textWidth + px) * 4;
+                        const alpha = sourceData[pixelIndex + 3];
+
+                        if (alpha > 25) {
+                            // Convert from temp canvas to normalized coordinates (0-1)
+                            const u = px / textWidth;
+                            const v = py / textHeight;
+
+                            // Use bilinear interpolation with corners to get world position
+                            const worldPos = bilinearInterpolate(t.corners, u, v);
+
+                            const r = sourceData[pixelIndex];
+                            const g = sourceData[pixelIndex + 1];
+                            const b = sourceData[pixelIndex + 2];
+
+                            // Transform this point for the other canvas
+                            const z = toComplex(worldPos.x, worldPos.y, t.canvas);
+                            const w = t.canvas === 'domain' ? userFn(z) : invFn(z);
+
+                            if (isFinite(w.re) && isFinite(w.im)) {
+                                const transformedPt = toCanvas(w, t.canvas === 'domain' ? 'codomain' : 'domain');
+
+                                if (isFinite(transformedPt.x) && isFinite(transformedPt.y)) {
+                                    transformedPoints.push({
+                                        x: transformedPt.x,
+                                        y: transformedPt.y,
+                                        color: `rgba(${r},${g},${b},0.95)`, // Very high alpha for 20x resolution compensation
+                                        size: transformedSampleStep * 2.5 // Bigger circles for smoother appearance
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                t.transformedPoints = transformedPoints;
+                t.warpedPoints = warpedPoints;
+            });
+        }
+
+        // Performance caching for transformations
+        const transformationCache = new Map();
+
+        function getCacheKey(obj, type) {
+            if (type === 'text') {
+                return `text_${obj.text}_${obj.fontSize}_${obj.corners.map(c => `${c.x},${c.y}`).join('_')}_${functionSelect.value}`;
+            } else if (type === 'image') {
+                return `image_${obj.width}_${obj.height}_${obj.corners.map(c => `${c.x},${c.y}`).join('_')}_${functionSelect.value}`;
+            }
+            return null;
+        }
+
+        function clearTransformationCache() {
+            transformationCache.clear();
+        }
+
+        // Clear cache when function changes
+        functionSelect.addEventListener('change', clearTransformationCache);
+
+        function showImageInstructions() {
+            alert('Image Mode: Drag and drop an image file onto either canvas to add it. The image will be transformed according to the selected function.');
+        }
+
+        function drawTransformedImage(g, img) {
+            if (!img.transformedPoints || img.transformedPoints.length === 0) return;
+
+            // Draw transformed image with higher resolution circles (3x resolution with compensation)
+            img.transformedPoints.forEach(pt => {
+                if (isFinite(pt.x) && isFinite(pt.y)) {
+                    g.fillStyle = pt.color;
+                    // Use the high-resolution size (already adjusted in point generation)
+                    const size = pt.size || 1;
+                    g.beginPath();
+                    g.arc(pt.x, pt.y, size, 0, 2 * Math.PI);
+                    g.fill();
+                }
+            });
+        }
+
+        function drawTransformedText(g, text) {
+            if (!text.transformedPoints || text.transformedPoints.length === 0) return;
+
+            // Draw transformed text with higher resolution circles (3x resolution with compensation)
+            text.transformedPoints.forEach(pt => {
+                if (isFinite(pt.x) && isFinite(pt.y)) {
+                    g.fillStyle = pt.color;
+                    // Use the high-resolution size (already adjusted in point generation)
+                    const size = pt.size || 1;
+                    g.beginPath();
+                    g.arc(pt.x, pt.y, size, 0, 2 * Math.PI);
+                    g.fill();
+                }
+            });
+        }
+
+        function handleImageDrop(evt, canvas) {
+            evt.preventDefault();
+            isDragOver = false;
+
+            const files = evt.dataTransfer.files;
+            if (files.length === 0) return;
+
+            const file = files[0];
+            if (!file.type.startsWith('image/')) {
+                alert('Please drop an image file.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const img = new Image();
+                img.onload = function () {
+                    const dropPos = getPos(evt, canvas);
+                    addImage(img, dropPos.x, dropPos.y, canvas);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function addImage(imgElement, x, y, canvas) {
+            // Place image at click location with reasonable default size
+            // Use a moderate default size that maintains aspect ratio
+            const canvasSize = Math.min(canvases[canvas].width, canvases[canvas].height);
+            const defaultSize = Math.min(canvasSize * 0.25, 200); // Slightly larger default size
+            
+            const aspectRatio = imgElement.width / imgElement.height;
+            let width, height;
+
+            if (aspectRatio > 1) {
+                // Landscape orientation
+                width = defaultSize;
+                height = width / aspectRatio;
+            } else {
+                // Portrait or square orientation
+                height = defaultSize;
+                width = height * aspectRatio;
+            }
+
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+
+            const img = {
+                element: imgElement,
+                canvas: canvas,
+                x: x,
+                y: y,
+                width: width,
+                height: height,
+                originalWidth: imgElement.width,
+                originalHeight: imgElement.height,
+                scaleFactor: width / imgElement.width, // Track scaling for performance optimization
+                transformedPoints: [],
+                warpedPoints: [],
+                corners: [
+                    { x: x - halfWidth, y: y - halfHeight }, // Top-left
+                    { x: x + halfWidth, y: y - halfHeight }, // Top-right
+                    { x: x + halfWidth, y: y + halfHeight }, // Bottom-right
+                    { x: x - halfWidth, y: y + halfHeight } // Bottom-left
+                ]
+            };
+
+            updateImageTransformation(img);
+            images.push(img);
+            redrawAll();
+        }
+
+        function updateImageTransformation(img) {
+            // Use forward mapping like text for better performance
+            const transformedPoints = [];
+            const warpedPoints = []; // For the original canvas when warped
+
+            // Create a temporary canvas to sample from the original image
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = img.element.width;
+            tempCanvas.height = img.element.height;
+            tempCtx.drawImage(img.element, 0, 0);
+            const sourceImageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const sourceData = sourceImageData.data;
+
+            // Sample with adaptive density for scalable quality
+            const contentSize = img.width * img.height;
+            const quality = getQualityLevel(contentSize);
+            const baseSampleStep = Math.max(PERFORMANCE_SETTINGS.MIN_SAMPLE_STEP, 2);
+            const sampleStep = Math.max(1, baseSampleStep / quality.density);
+
+            // For transformed points (right side), use 20x higher resolution for ultra-smooth images
+            const transformedSampleStep = Math.max(1, sampleStep / 20);
+
+            // Generate points for warped display on original canvas
+            for (let y = 0; y < img.height; y += sampleStep) {
+                for (let x = 0; x < img.width; x += sampleStep) {
+                    // Convert to normalized coordinates (0-1)
+                    const u = x / img.width;
+                    const v = y / img.height;
+
+                    // Use bilinear interpolation with corners to get world position
+                    const worldPos = bilinearInterpolate(img.corners, u, v);
+
+                    // Sample the original image
+                    const imgX = Math.floor(x * img.element.width / img.width);
+                    const imgY = Math.floor(y * img.element.height / img.height);
+
+                    if (imgX >= 0 && imgX < img.element.width && imgY >= 0 && imgY < img.element.height) {
+                        const pixelIndex = (imgY * img.element.width + imgX) * 4;
+                        const alpha = sourceData[pixelIndex + 3];
+
+                        if (alpha > 25) { // Only process non-transparent pixels
+                            const r = sourceData[pixelIndex];
+                            const g = sourceData[pixelIndex + 1];
+                            const b = sourceData[pixelIndex + 2];
+
+                            // Store warped points for original canvas
+                            warpedPoints.push({
+                                x: worldPos.x,
+                                y: worldPos.y,
+                                color: `rgba(${r},${g},${b},0.6)`, // Semi-transparent for overlapping
+                                size: sampleStep * 4.0 // Much larger circles to fill gaps
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Generate higher resolution points for transformation (20x resolution)
+            for (let y = 0; y < img.height; y += transformedSampleStep) {
+                for (let x = 0; x < img.width; x += transformedSampleStep) {
+                    // Convert to normalized coordinates (0-1)
+                    const u = x / img.width;
+                    const v = y / img.height;
+
+                    // Use bilinear interpolation with corners to get world position
+                    const worldPos = bilinearInterpolate(img.corners, u, v);
+
+                    // Sample the original image
+                    const imgX = Math.floor(x * img.element.width / img.width);
+                    const imgY = Math.floor(y * img.element.height / img.height);
+
+                    if (imgX >= 0 && imgX < img.element.width && imgY >= 0 && imgY < img.element.height) {
+                        const pixelIndex = (imgY * img.element.width + imgX) * 4;
+                        const alpha = sourceData[pixelIndex + 3];
+
+                        if (alpha > 25) { // Only process non-transparent pixels
+                            const r = sourceData[pixelIndex];
+                            const g = sourceData[pixelIndex + 1];
+                            const b = sourceData[pixelIndex + 2];
+
+                            // Transform this point for the other canvas with higher resolution
+                            const z = toComplex(worldPos.x, worldPos.y, img.canvas);
+                            const w = img.canvas === 'domain' ? userFn(z) : invFn(z);
+
+                            if (isFinite(w.re) && isFinite(w.im)) {
+                                const transformedPt = toCanvas(w, img.canvas === 'domain' ? 'codomain' : 'domain');
+
+                                if (isFinite(transformedPt.x) && isFinite(transformedPt.y)) {
+                                    transformedPoints.push({
+                                        x: transformedPt.x,
+                                        y: transformedPt.y,
+                                        color: `rgba(${r},${g},${b},0.95)`, // Very high alpha for 20x resolution compensation
+                                        size: transformedSampleStep * 2.5 // Bigger circles for smoother appearance
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            img.transformedPoints = transformedPoints;
+            img.warpedPoints = warpedPoints;
+        }
+
+        function bilinearSample(imageData, width, height, x, y) {
+            // Clamp coordinates
+            x = Math.max(0, Math.min(width - 1, x));
+            y = Math.max(0, Math.min(height - 1, y));
+
+            const x1 = Math.floor(x);
+            const y1 = Math.floor(y);
+            const x2 = Math.min(x1 + 1, width - 1);
+            const y2 = Math.min(y1 + 1, height - 1);
+
+            const fx = x - x1;
+            const fy = y - y1;
+
+            // Get the four surrounding pixels
+            const getPixel = (px, py) => {
+                const index = (py * width + px) * 4;
+                return {
+                    r: imageData[index],
+                    g: imageData[index + 1],
+                    b: imageData[index + 2],
+                    a: imageData[index + 3]
+                };
+            };
+
+            const p1 = getPixel(x1, y1);
+            const p2 = getPixel(x2, y1);
+            const p3 = getPixel(x1, y2);
+            const p4 = getPixel(x2, y2);
+
+            // Bilinear interpolation
+            const interpolate = (v1, v2, v3, v4) => {
+                const top = v1 * (1 - fx) + v2 * fx;
+                const bottom = v3 * (1 - fx) + v4 * fx;
+                return top * (1 - fy) + bottom * fy;
+            };
+
+            return {
+                r: Math.round(interpolate(p1.r, p2.r, p3.r, p4.r)),
+                g: Math.round(interpolate(p1.g, p2.g, p3.g, p4.g)),
+                b: Math.round(interpolate(p1.b, p2.b, p3.b, p4.b)),
+                a: Math.round(interpolate(p1.a, p2.a, p3.a, p4.a))
+            };
+        }
+
+        // Set up drag and drop for images
+        ['domain', 'codomain'].forEach(key => {
+            const canvas = canvases[key];
+
+            canvas.addEventListener('dragover', (evt) => {
+                evt.preventDefault();
+                isDragOver = true;
+                canvas.style.backgroundColor = '#333';
+            });
+
+            canvas.addEventListener('dragleave', (evt) => {
+                isDragOver = false;
+                canvas.style.backgroundColor = '#222';
+            });
+
+            canvas.addEventListener('drop', (evt) => {
+                handleImageDrop(evt, key);
+                canvas.style.backgroundColor = '#222';
+            });
+        });
+
+        // Update text dimensions and transformations based on corners
+        function updateTextFromCorners(textIndex) {
+            const text = texts[textIndex];
+            const corners = text.corners;
+
+            // Calculate new bounds from corners
+            const minX = Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const maxX = Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const minY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+            const maxY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+
+            // Update position to center of bounds
+            text.x = (minX + maxX) / 2;
+            text.y = (minY + maxY) / 2;
+            text.width = maxX - minX;
+            text.height = maxY - minY;
+
+            updateTextTransformations();
+        }
+
+        function updateImageFromCorners(imageIndex) {
+            const image = images[imageIndex];
+            const corners = image.corners;
+
+            // Calculate new bounds from corners
+            const minX = Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const maxX = Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const minY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+            const maxY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+
+            // Update position to center of bounds
+            image.x = (minX + maxX) / 2;
+            image.y = (minY + maxY) / 2;
+            image.width = maxX - minX;
+            image.height = maxY - minY;
+
+            updateImageTransformation(image);
+        }
+
+        function drawWarpedImage(g, img) {
+            // Draw warped image using proper stretching and warping
+            // Map the entire image to fit within the corner boundaries
+            
+            // Save the current context state
+            g.save();
+            
+            try {
+                // Get the four corners of the warped image
+                const [tl, tr, br, bl] = img.corners;
+                
+                // Draw the image in segments using transforms
+                // Divide the image into a grid and transform each segment
+                const gridResolution = 15; // Number of segments per side for smooth warping
+                
+                for (let i = 0; i < gridResolution; i++) {
+                    for (let j = 0; j < gridResolution; j++) {
+                        const u1 = i / gridResolution;
+                        const v1 = j / gridResolution;
+                        const u2 = (i + 1) / gridResolution;
+                        const v2 = (j + 1) / gridResolution;
+                        
+                        // Source rectangle in original image (map entire image to corners)
+                        const sx = u1 * img.element.width;
+                        const sy = v1 * img.element.height;
+                        const sw = (u2 - u1) * img.element.width;
+                        const sh = (v2 - v1) * img.element.height;
+                        
+                        // Destination quadrilateral corners using bilinear interpolation
+                        const destTL = bilinearInterpolate(img.corners, u1, v1);
+                        const destTR = bilinearInterpolate(img.corners, u2, v1);
+                        const destBR = bilinearInterpolate(img.corners, u2, v2);
+                        const destBL = bilinearInterpolate(img.corners, u1, v2);
+                        
+                        // Draw this segment as a transformed rectangle approximation
+                        g.save();
+                        
+                        // Set up clipping path for this segment
+                        g.beginPath();
+                        g.moveTo(destTL.x, destTL.y);
+                        g.lineTo(destTR.x, destTR.y);
+                        g.lineTo(destBR.x, destBR.y);
+                        g.lineTo(destBL.x, destBL.y);
+                        g.closePath();
+                        g.clip();
+                        
+                        // Calculate approximate transform for this segment
+                        const centerDest = {
+                            x: (destTL.x + destTR.x + destBR.x + destBL.x) / 4,
+                            y: (destTL.y + destTR.y + destBR.y + destBL.y) / 4
+                        };
+                        
+                        // Calculate scale factors based on segment size
+                        const destWidth = Math.abs(destTR.x - destTL.x);
+                        const destHeight = Math.abs(destBL.y - destTL.y);
+                        const scaleX = destWidth / sw;
+                        const scaleY = destHeight / sh;
+                        
+                        // Apply transformation
+                        g.translate(centerDest.x, centerDest.y);
+                        g.scale(scaleX, scaleY);
+                        
+                        // Draw the image segment
+                        g.drawImage(
+                            img.element,
+                            sx, sy, sw, sh,
+                            -sw / 2, -sh / 2, sw, sh
+                        );
+                        
+                        g.restore();
+                    }
+                }
+            } catch (error) {
+                // Fallback: draw the image to fit the corner bounds
+                console.warn('Image warping failed, using fallback:', error);
+                
+                // Calculate bounding box of corners
+                const minX = Math.min(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
+                const maxX = Math.max(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
+                const minY = Math.min(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
+                const maxY = Math.max(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
+                
+                // Draw image to fit bounding box
+                g.drawImage(img.element, minX, minY, maxX - minX, maxY - minY);
+            }
+            
+            // Restore the context state
+            g.restore();
         }
     </script>
     <!-- Thank You Icon -->
