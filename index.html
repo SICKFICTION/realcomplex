@@ -1,176 +1,704 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Conformal Mapping Visualizer</title>
-  <style>
-    body { margin:0; padding:0; display:flex; height:100vh; background:#111; color:#eee; font-family:sans-serif; overflow:hidden; }
-    #controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:10px; border-radius:6px; z-index:10; display:flex; gap:8px; align-items:center; }
-    #controls input, #controls select { color:#000; padding:2px 4px; }
-    .canvas-container { position:relative; flex:1; display:flex; flex-direction:column; }
-    .canvas-label { text-align:center; color:#aaa; margin-bottom:4px; font-size:14px; }
-    canvas { flex:1; background:#222; cursor:crosshair; touch-action:none; }
-    .domain { border-right:2px solid #555; }
-    .codomain { border-left:2px solid #555; }
-    .tooltip { position:absolute; background:rgba(0,0,0,0.7); color:#fff; padding:2px 4px; border-radius:4px; font-size:12px; pointer-events:none; white-space:nowrap; z-index:20; }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conformal Mapping Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background: #111;
+            color: #eee;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 6px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        #controls input,
+        #controls select {
+            color: #000;
+            padding: 2px 4px;
+        }
+
+        .canvas-container {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-label {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        canvas {
+            flex: 1;
+            background: #222;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .domain {
+            border-right: 2px solid #555;
+        }
+
+        .codomain {
+            border-left: 2px solid #555;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 20;
+        }
+    </style>
 </head>
+
 <body>
-  <div id="controls">
-    <span style="color:#fff; font-weight:bold;">f(z) = z²</span>
-    <label>Tool:
-      <select id="toolSelect">
-        <option value="freehand">Freehand</option>
-        <option value="line">Line</option>
-        <option value="circle">Circle</option>
-        <option value="polygon">Polygon</option>
-        <option value="sine">Sine Wave</option>
-        <option value="spiral">Spiral</option>
-        <option value="star">Star</option>
-        <option value="dot">Dot</option>
-        <option value="etch">Etch-a-Sketch</option>
-      </select>
-    </label>
-    <label id="paramLabel" style="display:none">
-      Turns/Sides:
-      <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:50px" />
-    </label>
-    <button id="clearBtn">Clear</button>
-    <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
-    <label>Zoom:
-      <input type="range" id="zoomSlider" min="0.1" max="10" step="0.1" value="1" style="width:100px" />
-    </label>
-  </div>
-  <div id="tooltip" class="tooltip" style="display:none;"></div>
-  <div class="canvas-container">
-    <div class="canvas-label">Real Plane</div>
-    <canvas id="canvasDomain" class="domain"></canvas>
-  </div>
-  <div class="canvas-container">
-    <div class="canvas-label">Complex Plane</div>
-    <canvas id="canvasCodomain" class="codomain"></canvas>
-  </div>
-  <script>
-    const canvases = { domain: document.getElementById('canvasDomain'), codomain: document.getElementById('canvasCodomain') };
-    const ctx = { domain: canvases.domain.getContext('2d'), codomain: canvases.codomain.getContext('2d') };
-    const toolSelect = document.getElementById('toolSelect');
-    const paramLabel = document.getElementById('paramLabel');
-    const paramInput = document.getElementById('paramInput');
-    const clearBtn = document.getElementById('clearBtn');
-    const continuousToggle = document.getElementById('continuousToggle');
-    const tooltip = document.getElementById('tooltip');
+    <div id="controls">
+        <label>Function:
+            <select id="functionSelect">
+                <option value="z2">z²</option>
+                <option value="z3">z³</option>
+                <option value="z4">z⁴</option>
+                <option value="inv">1/z</option>
+                <option value="log">log(z)</option>
+                <option value="exp">e^z</option>
+                <option value="sin">sin(z)</option>
+                <option value="cos">cos(z)</option>
+                <option value="sqrt">√z</option>
+                <option value="zbar">conjugate(z)</option>
+                <option value="mobius">(z-1)/(z+1)</option>
+                <option value="quadratic">z²+z</option>
+            </select>
+        </label>
+        <label>Tool:
+            <select id="toolSelect">
+                <option value="freehand">Freehand</option>
+                <option value="line">Line</option>
+                <option value="circle">Circle</option>
+                <option value="polygon">Polygon</option>
+                <option value="sine">Sine Wave</option>
+                <option value="spiral">Spiral</option>
+                <option value="star">Star</option>
+                <option value="dot">Dot</option>
+                <option value="etch">Etch-a-Sketch</option>
+                <option value="chessboard">Chessboard</option>
+            </select>
+        </label>
+        <label id="paramLabel" style="display:none">
+            Turns/Sides:
+            <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:50px" />
+        </label>
+        <button id="clearBtn">Clear</button>
+        <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
+        <label>Zoom:
+            <input type="range" id="zoomSlider" min="0.1" max="10" step="0.1" value="1" style="width:100px" />
+        </label>
+    </div>
+    <div id="tooltip" class="tooltip" style="display:none;"></div>
+    <div class="canvas-container">
+        <div class="canvas-label">Real Plane</div>
+        <canvas id="canvasDomain" class="domain"></canvas>
+    </div>
+    <div class="canvas-container">
+        <div class="canvas-label">Complex Plane</div>
+        <canvas id="canvasCodomain" class="codomain"></canvas>
+    </div>
+    <script>
+        const canvases = { domain: document.getElementById('canvasDomain'), codomain: document.getElementById('canvasCodomain') };
+        const ctx = { domain: canvases.domain.getContext('2d'), codomain: canvases.codomain.getContext('2d') };
+        const functionSelect = document.getElementById('functionSelect');
+        const toolSelect = document.getElementById('toolSelect');
+        const paramLabel = document.getElementById('paramLabel');
+        const paramInput = document.getElementById('paramInput');
+        const clearBtn = document.getElementById('clearBtn');
+        const continuousToggle = document.getElementById('continuousToggle');
+        const tooltip = document.getElementById('tooltip');
 
-    let origin = {}, baseScale = 40, scale = baseScale;
-    let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
-    const MAX_STROKES = 6, strokes = [], dots = [];
+        let origin = {}, baseScale = 40, scale = baseScale;
+        let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
+        const MAX_STROKES = 6, strokes = [], dots = [];
 
-    function userFn(z) { return { re: z.re*z.re - z.im*z.im, im: 2*z.re*z.im }; }
-    let prevInv = null;
-    function sqrtBranches(w) { const r=Math.hypot(w.re,w.im), t=Math.atan2(w.im,w.re), rr=Math.sqrt(r), ang=t/2; return [{re:rr*Math.cos(ang),im:rr*Math.sin(ang)},{re:-rr*Math.cos(ang),im:-rr*Math.sin(ang)}]; }
-    function chooseRoot(w) { const [r1,r2]=sqrtBranches(w); if(!prevInv) prevInv=r1; const d1=(r1.re-prevInv.re)**2+(r1.im-prevInv.im)**2, d2=(r2.re-prevInv.re)**2+(r2.im-prevInv.im)**2; prevInv=d1<d2?r1:r2; return prevInv; }
-    function invFn(w) { return continuousToggle.checked?chooseRoot(w):sqrtBranches(w)[0]; }
+        // Chessboard state
+        let chessboard = null;
+        let isDraggingCorner = false;
+        let dragCornerIndex = -1;
+        let isDraggingChessboard = false;
+        let chessboardDragOffset = { x: 0, y: 0 };
 
-    function toComplex(x,y,key){ return { re:(x-origin[key].x)/scale, im:(origin[key].y-y)/scale }; }
-    function toCanvas(z,key){ return { x:origin[key].x+z.re*scale, y:origin[key].y-z.im*scale }; }
+        // Mathematical functions
+        function getUserFunction() {
+            const fn = functionSelect.value;
+            switch (fn) {
+                case 'z2': return z => ({ re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im });
+                case 'z3': return z => {
+                    const r2 = z.re * z.re - z.im * z.im;
+                    const i2 = 2 * z.re * z.im;
+                    return { re: r2 * z.re - i2 * z.im, im: r2 * z.im + i2 * z.re };
+                };
+                case 'z4': return z => {
+                    const z2 = { re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im };
+                    return { re: z2.re * z2.re - z2.im * z2.im, im: 2 * z2.re * z2.im };
+                };
+                case 'inv': return z => {
+                    const denom = z.re * z.re + z.im * z.im;
+                    if (denom === 0) return { re: Infinity, im: Infinity };
+                    return { re: z.re / denom, im: -z.im / denom };
+                };
+                case 'log': return z => {
+                    const r = Math.hypot(z.re, z.im);
+                    if (r === 0) return { re: -Infinity, im: 0 };
+                    return { re: Math.log(r), im: Math.atan2(z.im, z.re) };
+                };
+                case 'exp': return z => {
+                    const exp_re = Math.exp(z.re);
+                    return { re: exp_re * Math.cos(z.im), im: exp_re * Math.sin(z.im) };
+                };
+                case 'sin': return z => {
+                    const exp_iz = { re: -z.im, im: z.re };
+                    const exp_neg_iz = { re: z.im, im: -z.re };
+                    const e1 = getUserFunction().exp ? getUserFunction().exp(exp_iz) : 
+                               { re: Math.exp(-z.im) * Math.cos(z.re), im: Math.exp(-z.im) * Math.sin(z.re) };
+                    const e2 = getUserFunction().exp ? getUserFunction().exp(exp_neg_iz) : 
+                               { re: Math.exp(z.im) * Math.cos(-z.re), im: Math.exp(z.im) * Math.sin(-z.re) };
+                    return { re: (e1.re - e2.re) / 2, im: (e1.im - e2.im) / 2 };
+                };
+                case 'cos': return z => {
+                    const exp_iz = { re: -z.im, im: z.re };
+                    const exp_neg_iz = { re: z.im, im: -z.re };
+                    const e1 = { re: Math.exp(-z.im) * Math.cos(z.re), im: Math.exp(-z.im) * Math.sin(z.re) };
+                    const e2 = { re: Math.exp(z.im) * Math.cos(-z.re), im: Math.exp(z.im) * Math.sin(-z.re) };
+                    return { re: (e1.re + e2.re) / 2, im: (e1.im + e2.im) / 2 };
+                };
+                case 'sqrt': return z => {
+                    const r = Math.hypot(z.re, z.im);
+                    const t = Math.atan2(z.im, z.re);
+                    const rr = Math.sqrt(r);
+                    const ang = t / 2;
+                    return { re: rr * Math.cos(ang), im: rr * Math.sin(ang) };
+                };
+                case 'zbar': return z => ({ re: z.re, im: -z.im });
+                case 'mobius': return z => {
+                    const num = { re: z.re - 1, im: z.im };
+                    const den = { re: z.re + 1, im: z.im };
+                    const denom = den.re * den.re + den.im * den.im;
+                    if (denom === 0) return { re: Infinity, im: Infinity };
+                    return { re: (num.re * den.re + num.im * den.im) / denom, im: (num.im * den.re - num.re * den.im) / denom };
+                };
+                case 'quadratic': return z => {
+                    const z2 = { re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im };
+                    return { re: z2.re + z.re, im: z2.im + z.im };
+                };
+                default: return z => ({ re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im });
+            }
+        }
 
-    function resize() {
-      // adjust scale based on zoom slider
-      const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
-      scale = baseScale * zoomVal; canvases.domain.width=window.innerWidth/2; canvases.domain.height=window.innerHeight; canvases.codomain.width=window.innerWidth/2; canvases.codomain.height=window.innerHeight; origin.domain={x:canvases.domain.width/2,y:canvases.domain.height/2}; origin.codomain={x:canvases.codomain.width/2,y:canvases.codomain.height/2}; redrawAll(); }
-    window.addEventListener('resize', resize);
-    // zoom slider listener
-    const zoomSlider = document.getElementById('zoomSlider');
-    zoomSlider.addEventListener('input', resize);
+        function userFn(z) { return getUserFunction()(z); }
+        let prevInv = null;
+        function getInverseFunction() {
+            const fn = functionSelect.value;
+            switch (fn) {
+                case 'z2': return w => {
+                    const [r1, r2] = sqrtBranches(w);
+                    return continuousToggle.checked ? chooseRoot(w) : r1;
+                };
+                case 'z3': return w => {
+                    const r = Math.cbrt(Math.hypot(w.re, w.im));
+                    const t = Math.atan2(w.im, w.re) / 3;
+                    return { re: r * Math.cos(t), im: r * Math.sin(t) };
+                };
+                case 'z4': return w => {
+                    const r = Math.pow(Math.hypot(w.re, w.im), 0.25);
+                    const t = Math.atan2(w.im, w.re) / 4;
+                    return { re: r * Math.cos(t), im: r * Math.sin(t) };
+                };
+                case 'inv': return w => {
+                    const denom = w.re * w.re + w.im * w.im;
+                    if (denom === 0) return { re: Infinity, im: Infinity };
+                    return { re: w.re / denom, im: -w.im / denom };
+                };
+                case 'log': return w => {
+                    return { re: Math.exp(w.re) * Math.cos(w.im), im: Math.exp(w.re) * Math.sin(w.im) };
+                };
+                case 'exp': return w => {
+                    const r = Math.hypot(w.re, w.im);
+                    if (r === 0) return { re: -Infinity, im: 0 };
+                    return { re: Math.log(r), im: Math.atan2(w.im, w.re) };
+                };
+                case 'zbar': return w => ({ re: w.re, im: -w.im });
+                case 'mobius': return w => {
+                    const num = { re: w.re + 1, im: w.im };
+                    const den = { re: 1 - w.re, im: -w.im };
+                    const denom = den.re * den.re + den.im * den.im;
+                    if (denom === 0) return { re: Infinity, im: Infinity };
+                    return { re: (num.re * den.re + num.im * den.im) / denom, im: (num.im * den.re - num.re * den.im) / denom };
+                };
+                case 'sqrt': return w => ({ re: w.re * w.re - w.im * w.im, im: 2 * w.re * w.im });
+                default: return w => {
+                    const [r1, r2] = sqrtBranches(w);
+                    return continuousToggle.checked ? chooseRoot(w) : r1;
+                };
+            }
+        }
+        
+        function sqrtBranches(w) { const r = Math.hypot(w.re, w.im), t = Math.atan2(w.im, w.re), rr = Math.sqrt(r), ang = t / 2; return [{ re: rr * Math.cos(ang), im: rr * Math.sin(ang) }, { re: -rr * Math.cos(ang), im: -rr * Math.sin(ang) }]; }
+        function chooseRoot(w) { const [r1, r2] = sqrtBranches(w); if (!prevInv) prevInv = r1; const d1 = (r1.re - prevInv.re) ** 2 + (r1.im - prevInv.im) ** 2, d2 = (r2.re - prevInv.re) ** 2 + (r2.im - prevInv.im) ** 2; prevInv = d1 < d2 ? r1 : r2; return prevInv; }
+        function invFn(w) { return getInverseFunction()(w); }
 
-    toolSelect.addEventListener('change', () => { paramLabel.style.display = (['spiral','star','polygon'].includes(toolSelect.value)) ? 'inline-block':'none'; });
+        function toComplex(x, y, key) { return { re: (x - origin[key].x) / scale, im: (origin[key].y - y) / scale }; }
+        function toCanvas(z, key) { return { x: origin[key].x + z.re * scale, y: origin[key].y - z.im * scale }; }
 
-    function drawGrid(key) {
-      const c=canvases[key], g=ctx[key]; g.clearRect(0,0,c.width,c.height);
-      g.strokeStyle='#444'; g.lineWidth=1;
-      for(let x=0;x<c.width;x+=scale){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,c.height); g.stroke(); }
-      for(let y=0;y<c.height;y+=scale){ g.beginPath(); g.moveTo(0,y); g.lineTo(c.width,y); g.stroke(); }
-      g.strokeStyle='#888'; g.lineWidth=2;
-      g.beginPath(); g.moveTo(origin[key].x,0); g.lineTo(origin[key].x,c.height); g.stroke();
-      g.beginPath(); g.moveTo(0,origin[key].y); g.lineTo(c.width,origin[key].y); g.stroke();
-    }
+        function resize() {
+            // adjust scale based on zoom slider
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            scale = baseScale * zoomVal; canvases.domain.width = window.innerWidth / 2; canvases.domain.height = window.innerHeight; canvases.codomain.width = window.innerWidth / 2; canvases.codomain.height = window.innerHeight; origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 }; origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 }; redrawAll();
+        }
+        window.addEventListener('resize', resize);
+        // zoom slider listener
+        const zoomSlider = document.getElementById('zoomSlider');
+        zoomSlider.addEventListener('input', resize);
 
-    function redrawAll(){ drawGrid('domain'); drawGrid('codomain'); strokes.forEach((s,i)=>{ const alpha=i<strokes.length-MAX_STROKES?0.2:1, color=`hsla(${s.hue},70%,60%,${alpha})`; ['domain','codomain'].forEach(key=>{ const pts=key===s.canvas?s.pts:s.imagePts, g=ctx[key]; g.strokeStyle=color; g.lineWidth=2; drawShape(g,pts,s.mode); }); }); dots.forEach(d=>{ ['domain','codomain'].forEach((key,idx)=>{ const g=ctx[key], lab=(idx===0? d.label.dom: invFn(d.label.dom)), p=(idx===0? {x:d.x,y:d.y}: toCanvas(lab,key)); g.fillStyle='yellow'; g.beginPath(); g.arc(p.x,p.y,5,0,2*Math.PI); g.fill(); g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`,p.x+6,p.y-6); }); }); }
+        toolSelect.addEventListener('change', () => { 
+            paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none'; 
+            if (toolSelect.value === 'chessboard') {
+                initChessboard();
+            }
+        });
 
-    function drawShape(g,pts,mode){ if(!pts||pts.length<2)return; g.beginPath(); g.moveTo(pts[0].x,pts[0].y); pts.forEach((p,i)=>{ if(i>0) g.lineTo(p.x,p.y); }); if(!['freehand','line','sine','spiral','dot','etch'].includes(mode)) g.closePath(); g.stroke(); }
+        function drawGrid(key) {
+            const c = canvases[key], g = ctx[key]; g.clearRect(0, 0, c.width, c.height);
+            
+            // Draw main axes even in chessboard mode
+            if (toolSelect.value === 'chessboard') {
+                g.strokeStyle = '#888'; g.lineWidth = 2;
+                g.beginPath(); g.moveTo(origin[key].x, 0); g.lineTo(origin[key].x, c.height); g.stroke();
+                g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
+                return;
+            }
+            
+            g.strokeStyle = '#444'; g.lineWidth = 1;
+            for (let x = 0; x < c.width; x += scale) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, c.height); g.stroke(); }
+            for (let y = 0; y < c.height; y += scale) { g.beginPath(); g.moveTo(0, y); g.lineTo(c.width, y); g.stroke(); }
+            g.strokeStyle = '#888'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(origin[key].x, 0); g.lineTo(origin[key].x, c.height); g.stroke();
+            g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
+        }
 
-    function computePts(tool,A,B){ const pts=[], dx=B.x-A.x,dy=B.y-A.y; switch(tool){
-      case 'line': for(let t=0;t<=1;t+=0.01) pts.push({x:A.x+dx*t,y:A.y+dy*t}); break;
-      case 'circle': { const cx=(A.x+B.x)/2,cy=(A.y+B.y)/2,r=Math.hypot(dx,dy)/2; for(let a=0;a<2*Math.PI;a+=0.02) pts.push({x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}); pts.push(pts[0]); } break;
-      case 'polygon': { const sides=Math.max(3,parseInt(paramInput.value)||5),ang0=Math.atan2(dy,dx),rad=Math.hypot(dx,dy),verts=[]; for(let i=0;i<sides;i++){ const ang=ang0+2*Math.PI*i/sides; verts.push({x:A.x+Math.cos(ang)*rad,y:A.y+Math.sin(ang)*rad}); } verts.push(verts[0]); const sp=50; for(let k=0;k<verts.length-1;k++){ const P=verts[k],Q=verts[k+1],sx=Q.x-P.x,sy=Q.y-P.y; for(let t=0;t<=1;t+=1/sp) pts.push({x:P.x+sx*t,y:P.y+sy*t}); } } break;
-      case 'sine': { const w=Math.hypot(dx,dy),ux=dx/w,uy=dy/w,max=Math.hypot(canvases[activeCanvas].width,canvases[activeCanvas].height); for(let t=0;t<max;t+=2){ const cx=A.x+ux*t,cy=A.y+uy*t,amp=w/4,ph=2*Math.PI*t/w; pts.push({x:cx-uy*amp*Math.sin(ph),y:cy+ux*amp*Math.sin(ph)});} } break;
-      case 'spiral': { const turns=Math.max(1,parseInt(paramInput.value)||3),base=Math.hypot(dx,dy),b=Math.log(1.618)/(Math.PI*0.5),a0=Math.atan2(dy,dx),maxT=turns*2*Math.PI; for(let th=0;th<=maxT;th+=0.05){ const r=base*Math.exp(b*th); pts.push({x:A.x+Math.cos(a0+th)*r,y:A.y+Math.sin(a0+th)*r});} } break;
-      case 'star': { const n=Math.max(3,parseInt(paramInput.value)||5),rad=Math.hypot(dx,dy),a0=Math.atan2(dy,dx),verts=[]; if(n%2===0){ const h=n/2,f=[],s=[]; for(let i=0;i<h;i++){ const a=a0+2*Math.PI*i/h; f.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } for(let i=0;i<h;i++){ const a=a0+Math.PI/n+2*Math.PI*i/h; s.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } verts.push(...f,...s,f[0]); } else { const skip=Math.floor(n/2); for(let i=0;i<n;i++){ const idx=(i*skip)%n,a=a0+2*Math.PI*idx/n; verts.push({x:A.x+Math.cos(a)*rad,y:A.y+Math.sin(a)*rad}); } verts.push(verts[0]); } const sp=50; for(let k=0;k<verts.length-1;k++){ const P=verts[k],Q=verts[k+1],sx=Q.x-P.x,sy=Q.y-P.y; for(let t=0;t<=1;t+=1/sp) pts.push({x:P.x+sx*t,y:P.y+sy*t}); } } break;
-    } return pts; }
+        function redrawAll() { 
+            drawGrid('domain'); 
+            drawGrid('codomain'); 
+            
+            // Draw chessboard if active
+            if (chessboard && toolSelect.value === 'chessboard') {
+                drawChessboard();
+            }
+            
+            strokes.forEach((s, i) => { 
+                const alpha = i < strokes.length - MAX_STROKES ? 0.2 : 1, color = `hsla(${s.hue},70%,60%,${alpha})`;
+                ['domain', 'codomain'].forEach(key => { 
+                    const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key]; 
+                    g.strokeStyle = color; 
+                    g.lineWidth = 2; 
+                    drawShape(g, pts, s.mode); 
+                }); 
+            }); 
+            
+            dots.forEach(d => { 
+                ['domain', 'codomain'].forEach((key, idx) => { 
+                    const g = ctx[key], lab = (idx === 0 ? d.label.dom : invFn(d.label.dom)), p = (idx === 0 ? { x: d.x, y: d.y } : toCanvas(lab, key)); 
+                    g.fillStyle = 'yellow'; 
+                    g.beginPath(); 
+                    g.arc(p.x, p.y, 5, 0, 2 * Math.PI); 
+                    g.fill(); 
+                    g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`, p.x + 6, p.y - 6); 
+                }); 
+            }); 
+        }
 
-    function startDraw(evt){ evt.preventDefault(); if(continuousToggle.checked) prevInv=null; const p=getPos(evt,activeCanvas); if(toolSelect.value==='dot'){ const z=toComplex(p.x,p.y,activeCanvas); dots.push({canvas:activeCanvas,x:p.x,y:p.y,label:{dom:z}}); redrawAll(); return;} isDrawing=true; startPt=p; currentPts=[p]; }
-    function moveDraw(evt){ if(!isDrawing) return; const tool=toolSelect.value,p=getPos(evt,activeCanvas); if(tool==='freehand'){ evt.preventDefault(); currentPts.push(p); redrawAll(); ['domain','codomain'].forEach(key=>{ const pts=key===activeCanvas?currentPts:currentPts.map(pt=>toCanvas(tool==='freehand'? (activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas))) :toComplex(pt.x,pt.y,activeCanvas),key)); ctx[key].strokeStyle='#fff'; ctx[key].lineWidth=2; drawShape(ctx[key],pts,'freehand'); }); } else if(tool!=='dot'){ evt.preventDefault(); const pts=computePts(tool,startPt,p); const img=pts.map(pt=>toCanvas(activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas)), activeCanvas==='domain'?'codomain':'domain')); redrawAll(); ['domain','codomain'].forEach(key=>{ const pts2=key===activeCanvas?pts:img; ctx[key].strokeStyle='#fff'; ctx[key].lineWidth=2; drawShape(ctx[key],pts2,tool); }); } }
-    function endDraw(evt){ if(!isDrawing) return; evt.preventDefault(); isDrawing=false; const tool=toolSelect.value; if(tool==='dot') return; const ePt=getPos(evt,activeCanvas); const pts=tool==='freehand'?currentPts:computePts(tool,startPt,ePt); const img=pts.map(pt=>toCanvas(activeCanvas==='domain'?userFn(toComplex(pt.x,pt.y,activeCanvas)):invFn(toComplex(pt.x,pt.y,activeCanvas)), activeCanvas==='domain'?'codomain':'domain')); strokes.push({canvas:activeCanvas,mode:tool,pts:pts,imagePts:img,hue:Math.random()*360}); if(strokes.length>MAX_STROKES) strokes.shift(); redrawAll(); }
-    function getPos(evt,key){ const r=canvases[key].getBoundingClientRect(),t=evt.touches?evt.touches[0]:null; return {x:(t?t.clientX:evt.clientX)-r.left,y:(t?t.clientY:evt.clientY)-r.top}; }
+        function drawShape(g, pts, mode) { if (!pts || pts.length < 2) return; g.beginPath(); g.moveTo(pts[0].x, pts[0].y); pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); }); if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath(); g.stroke(); }
 
-    ['mousedown','touchstart'].forEach(e=>{ canvases.domain.addEventListener(e,()=>activeCanvas='domain'); canvases.codomain.addEventListener(e,()=>activeCanvas='codomain'); canvases.domain.addEventListener(e,startDraw); canvases.codomain.addEventListener(e,startDraw); });
-    ['mousemove','touchmove'].forEach(e=>{ canvases.domain.addEventListener(e,moveDraw); canvases.codomain.addEventListener(e,moveDraw); });
-    ['mouseup','touchend','mouseleave','touchcancel'].forEach(e=>window.addEventListener(e,endDraw));
-    canvases.domain.addEventListener('mousemove',evt=>{ const p=getPos(evt,'domain'),z=toComplex(p.x,p.y,'domain'); if(z.re==null||z.im==null){tooltip.style.display='none';return;} tooltip.style.display='block'; tooltip.textContent=`x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`; tooltip.style.left=evt.clientX+10+'px'; tooltip.style.top=evt.clientY+10+'px'; });
-    canvases.codomain.addEventListener('mousemove',evt=>{ const p=getPos(evt,'codomain'),w=toComplex(p.x,p.y,'codomain'); if(w.re==null||w.im==null){tooltip.style.display='none';return;} tooltip.style.display='block'; tooltip.textContent=`Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`; tooltip.style.left=evt.clientX+10+'px'; tooltip.style.top=evt.clientY+10+'px'; });
-    canvases.domain.addEventListener('mouseleave',()=>tooltip.style.display='none'); canvases.codomain.addEventListener('mouseleave',()=>tooltip.style.display='none');
-    clearBtn.addEventListener('click',()=>{ strokes.length=0; dots.length=0; redrawAll(); });
-    resize();
+        function computePts(tool, A, B) {
+            const pts = [], dx = B.x - A.x, dy = B.y - A.y; switch (tool) {
+                case 'line': for (let t = 0; t <= 1; t += 0.01) pts.push({ x: A.x + dx * t, y: A.y + dy * t }); break;
+                case 'circle': { const cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, r = Math.hypot(dx, dy) / 2; for (let a = 0; a < 2 * Math.PI; a += 0.02) pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r }); pts.push(pts[0]); } break;
+                case 'polygon': { const sides = Math.max(3, parseInt(paramInput.value) || 5), ang0 = Math.atan2(dy, dx), rad = Math.hypot(dx, dy), verts = []; for (let i = 0; i < sides; i++) { const ang = ang0 + 2 * Math.PI * i / sides; verts.push({ x: A.x + Math.cos(ang) * rad, y: A.y + Math.sin(ang) * rad }); } verts.push(verts[0]); const sp = 50; for (let k = 0; k < verts.length - 1; k++) { const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y; for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t }); } } break;
+                case 'sine': { const w = Math.hypot(dx, dy), ux = dx / w, uy = dy / w, max = Math.hypot(canvases[activeCanvas].width, canvases[activeCanvas].height); for (let t = 0; t < max; t += 2) { const cx = A.x + ux * t, cy = A.y + uy * t, amp = w / 4, ph = 2 * Math.PI * t / w; pts.push({ x: cx - uy * amp * Math.sin(ph), y: cy + ux * amp * Math.sin(ph) }); } } break;
+                case 'spiral': { const turns = Math.max(1, parseInt(paramInput.value) || 3), base = Math.hypot(dx, dy), b = Math.log(1.618) / (Math.PI * 0.5), a0 = Math.atan2(dy, dx), maxT = turns * 2 * Math.PI; for (let th = 0; th <= maxT; th += 0.05) { const r = base * Math.exp(b * th); pts.push({ x: A.x + Math.cos(a0 + th) * r, y: A.y + Math.sin(a0 + th) * r }); } } break;
+                case 'star': { const n = Math.max(3, parseInt(paramInput.value) || 5), rad = Math.hypot(dx, dy), a0 = Math.atan2(dy, dx), verts = []; if (n % 2 === 0) { const h = n / 2, f = [], s = []; for (let i = 0; i < h; i++) { const a = a0 + 2 * Math.PI * i / h; f.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } for (let i = 0; i < h; i++) { const a = a0 + Math.PI / n + 2 * Math.PI * i / h; s.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } verts.push(...f, ...s, f[0]); } else { const skip = Math.floor(n / 2); for (let i = 0; i < n; i++) { const idx = (i * skip) % n, a = a0 + 2 * Math.PI * idx / n; verts.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad }); } verts.push(verts[0]); } const sp = 50; for (let k = 0; k < verts.length - 1; k++) { const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y; for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t }); } } break;
+            } return pts;
+        }
 
-    // Etch-a-Sketch state
-    let etchActive = false;
-    let etchCursor = { re: 0, im: 0 };
+        function startDraw(evt) { 
+            evt.preventDefault(); 
+            if (continuousToggle.checked) prevInv = null; 
+            const p = getPos(evt, activeCanvas); 
+            
+            // Handle chessboard corner dragging
+            if (toolSelect.value === 'chessboard' && activeCanvas === 'domain') {
+                const cornerIndex = getCornerAt(p.x, p.y);
+                if (cornerIndex !== -1) {
+                    isDraggingCorner = true;
+                    dragCornerIndex = cornerIndex;
+                    return;
+                }
+                
+                // Check if clicking inside chessboard for dragging whole board
+                if (isInsideChessboard(p.x, p.y)) {
+                    isDraggingChessboard = true;
+                    const center = getChessboardCenter();
+                    chessboardDragOffset = { x: p.x - center.x, y: p.y - center.y };
+                    return;
+                }
+            }
+            
+            if (toolSelect.value === 'dot') { 
+                const z = toComplex(p.x, p.y, activeCanvas); 
+                dots.push({ canvas: activeCanvas, x: p.x, y: p.y, label: { dom: z } }); 
+                redrawAll(); 
+                return; 
+            } 
+            
+            isDrawing = true; 
+            startPt = p; 
+            currentPts = [p]; 
+        }
+        function moveDraw(evt) { 
+            const p = getPos(evt, activeCanvas);
+            
+            // Handle chessboard corner dragging
+            if (isDraggingCorner && dragCornerIndex !== -1 && activeCanvas === 'domain') {
+                evt.preventDefault();
+                chessboard.corners[dragCornerIndex] = p;
+                redrawAll();
+                return;
+            }
+            
+            // Handle chessboard whole board dragging
+            if (isDraggingChessboard && activeCanvas === 'domain') {
+                evt.preventDefault();
+                const newCenter = { x: p.x - chessboardDragOffset.x, y: p.y - chessboardDragOffset.y };
+                moveChessboard(newCenter);
+                redrawAll();
+                return;
+            }
+            
+            if (!isDrawing) return; 
+            const tool = toolSelect.value; 
+            
+            if (tool === 'freehand') { 
+                evt.preventDefault(); 
+                currentPts.push(p); 
+                redrawAll();
+                ['domain', 'codomain'].forEach(key => { 
+                    const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key)); 
+                    ctx[key].strokeStyle = '#fff'; 
+                    ctx[key].lineWidth = 2; 
+                    drawShape(ctx[key], pts, 'freehand'); 
+                }); 
+            } else if (tool !== 'dot' && tool !== 'chessboard') { 
+                evt.preventDefault(); 
+                const pts = computePts(tool, startPt, p); 
+                const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain')); 
+                redrawAll();
+                ['domain', 'codomain'].forEach(key => { 
+                    const pts2 = key === activeCanvas ? pts : img; 
+                    ctx[key].strokeStyle = '#fff'; 
+                    ctx[key].lineWidth = 2; 
+                    drawShape(ctx[key], pts2, tool); 
+                }); 
+            } 
+        }
+        function endDraw(evt) { 
+            // Handle chessboard corner dragging end
+            if (isDraggingCorner) {
+                isDraggingCorner = false;
+                dragCornerIndex = -1;
+                return;
+            }
+            
+            // Handle chessboard whole board dragging end
+            if (isDraggingChessboard) {
+                isDraggingChessboard = false;
+                return;
+            }
+            
+            if (!isDrawing) return; 
+            evt.preventDefault(); 
+            isDrawing = false; 
+            const tool = toolSelect.value; 
+            if (tool === 'dot' || tool === 'chessboard') return; 
+            const ePt = getPos(evt, activeCanvas); 
+            const pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt); 
+            const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain')); 
+            strokes.push({ canvas: activeCanvas, mode: tool, pts: pts, imagePts: img, hue: Math.random() * 360 }); 
+            if (strokes.length > MAX_STROKES) strokes.shift(); 
+            redrawAll(); 
+        }
+        function getPos(evt, key) { const r = canvases[key].getBoundingClientRect(), t = evt.touches ? evt.touches[0] : null; return { x: (t ? t.clientX : evt.clientX) - r.left, y: (t ? t.clientY : evt.clientY) - r.top }; }
 
-    // Handle mode switch for etch-a-sketch
-    toolSelect.addEventListener('change', () => {
-      etchActive = (toolSelect.value === 'etch');
-      paramLabel.style.display = (['spiral','star','polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
-      if (etchActive) {
-        etchCursor = { re: 0, im: 0 };
-      }
-    });
+        ['mousedown', 'touchstart'].forEach(e => { canvases.domain.addEventListener(e, () => activeCanvas = 'domain'); canvases.codomain.addEventListener(e, () => activeCanvas = 'codomain'); canvases.domain.addEventListener(e, startDraw); canvases.codomain.addEventListener(e, startDraw); });
+        ['mousemove', 'touchmove'].forEach(e => { canvases.domain.addEventListener(e, moveDraw); canvases.codomain.addEventListener(e, moveDraw); });
+        ['mouseup', 'touchend', 'mouseleave', 'touchcancel'].forEach(e => window.addEventListener(e, endDraw));
+        canvases.domain.addEventListener('mousemove', evt => { const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain'); if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; } tooltip.style.display = 'block'; tooltip.textContent = `x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`; tooltip.style.left = evt.clientX + 10 + 'px'; tooltip.style.top = evt.clientY + 10 + 'px'; });
+        canvases.codomain.addEventListener('mousemove', evt => { const p = getPos(evt, 'codomain'), w = toComplex(p.x, p.y, 'codomain'); if (w.re == null || w.im == null) { tooltip.style.display = 'none'; return; } tooltip.style.display = 'block'; tooltip.textContent = `Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`; tooltip.style.left = evt.clientX + 10 + 'px'; tooltip.style.top = evt.clientY + 10 + 'px'; });
+        canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+        clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; redrawAll(); });
+        resize();
 
-    // WASD controls for etch-a-sketch
-    window.addEventListener('keydown', evt => {
-      if (!etchActive) return;
-      const step = 1/scale;
-      switch (evt.key.toLowerCase()) {
-        case 'w': etchCursor.im += step; break;
-        case 's': etchCursor.im -= step; break;
-        case 'a': etchCursor.re -= step; break;
-        case 'd': etchCursor.re += step; break;
-        default: return;
-      }
-      // Ensure we have an etch stroke initialized
-      let stroke = strokes[strokes.length - 1];
-      if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
-        stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
-        strokes.push(stroke);
-        if (strokes.length > MAX_STROKES) strokes.shift();
-      }
-      // Append new point to stroke
-      // Append new point to stroke in pixel coordinates
-      stroke.pts.push(toCanvas(etchCursor, 'domain'));
-      stroke.imagePts.push(toCanvas(userFn(etchCursor), 'codomain'));
-      redrawAll();
-      evt.preventDefault();
-    });
-  </script>
-  <!-- Thank You Icon -->
-  <div id="thankYouIcon" style="position:fixed; bottom:10px; right:10px; font-size:24px; cursor:pointer; color:red; z-index:100;">❤️</div>
-  <div id="thankYouPopup" style="display:none; position:fixed; bottom:40px; right:10px; background:rgba(0,0,0,0.8); color:#fff; padding:10px; border-radius:6px; max-width:220px; font-size:12px; z-index:100;">
-    Thank you for using Real Complex, I hope you find it useful. If you have any questions or bugs or love it enough to support then contact me / paypal <a href="mailto:sickfiction@gmail.com" style="color:#fff; text-decoration:underline;">sickfiction@gmail.com</a> Have a great day. <br/>— James
-  </div>
-  <script>
-    document.getElementById('thankYouIcon').addEventListener('click', () => {
-      const popup = document.getElementById('thankYouPopup');
-      popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
-    });
-  </script>
+        // Etch-a-Sketch state
+        let etchActive = false;
+        let etchCursor = { re: 0, im: 0 };
+
+        // Handle mode switch for etch-a-sketch
+        toolSelect.addEventListener('change', () => {
+            etchActive = (toolSelect.value === 'etch');
+            paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
+            if (etchActive) {
+                etchCursor = { re: 0, im: 0 };
+            }
+            if (toolSelect.value === 'chessboard') {
+                initChessboard();
+            }
+        });
+
+        // WASD controls for etch-a-sketch
+        window.addEventListener('keydown', evt => {
+            if (!etchActive) return;
+            const step = 1 / scale;
+            switch (evt.key.toLowerCase()) {
+                case 'w': etchCursor.im += step; break;
+                case 's': etchCursor.im -= step; break;
+                case 'a': etchCursor.re -= step; break;
+                case 'd': etchCursor.re += step; break;
+                default: return;
+            }
+            // Ensure we have an etch stroke initialized
+            let stroke = strokes[strokes.length - 1];
+            if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
+                stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
+                strokes.push(stroke);
+                if (strokes.length > MAX_STROKES) strokes.shift();
+            }
+            // Append new point to stroke
+            // Append new point to stroke in pixel coordinates
+            stroke.pts.push(toCanvas(etchCursor, 'domain'));
+            stroke.imagePts.push(toCanvas(userFn(etchCursor), 'codomain'));
+            redrawAll();
+            evt.preventDefault();
+        });
+
+        // Chessboard functions
+        function initChessboard() {
+            const size = Math.min(canvases.domain.width, canvases.domain.height) * 0.3;
+            const centerX = canvases.domain.width / 2;
+            const centerY = canvases.domain.height / 2;
+            const halfSize = size / 2;
+            
+            chessboard = {
+                corners: [
+                    { x: centerX - halfSize, y: centerY - halfSize }, // top-left
+                    { x: centerX + halfSize, y: centerY - halfSize }, // top-right
+                    { x: centerX + halfSize, y: centerY + halfSize }, // bottom-right
+                    { x: centerX - halfSize, y: centerY + halfSize }  // bottom-left
+                ]
+            };
+            redrawAll();
+        }
+
+        function bilinearInterpolate(corners, u, v) {
+            // Bilinear interpolation between four corners
+            const x1 = (1 - u) * (1 - v) * corners[0].x + u * (1 - v) * corners[1].x + 
+                       u * v * corners[2].x + (1 - u) * v * corners[3].x;
+            const y1 = (1 - u) * (1 - v) * corners[0].y + u * (1 - v) * corners[1].y + 
+                       u * v * corners[2].y + (1 - u) * v * corners[3].y;
+            return { x: x1, y: y1 };
+        }
+
+        function drawChessboard() {
+            if (!chessboard) return;
+            
+            const g = ctx.domain;
+            const gc = ctx.codomain;
+            
+            // Draw grid lines with better sampling
+            for (let i = 0; i <= 8; i++) {
+                // Horizontal lines
+                const hPts = [];
+                const hImagePts = [];
+                for (let k = 0; k <= 80; k++) { // Increased resolution
+                    const u = k / 80;
+                    const v = i / 8;
+                    const pt = bilinearInterpolate(chessboard.corners, u, v);
+                    hPts.push(pt);
+                    const z = toComplex(pt.x, pt.y, 'domain');
+                    const w = userFn(z);
+                    if (isFinite(w.re) && isFinite(w.im)) {
+                        hImagePts.push(toCanvas(w, 'codomain'));
+                    }
+                }
+                
+                // Draw horizontal line on domain
+                g.strokeStyle = '#00ff88';
+                g.lineWidth = 2;
+                g.beginPath();
+                if (hPts.length > 0) {
+                    g.moveTo(hPts[0].x, hPts[0].y);
+                    hPts.forEach(p => g.lineTo(p.x, p.y));
+                    g.stroke();
+                }
+                
+                // Draw transformed horizontal line on codomain
+                if (hImagePts.length > 1) {
+                    gc.strokeStyle = '#00ff88';
+                    gc.lineWidth = 2;
+                    gc.beginPath();
+                    gc.moveTo(hImagePts[0].x, hImagePts[0].y);
+                    hImagePts.forEach(p => {
+                        if (isFinite(p.x) && isFinite(p.y)) {
+                            gc.lineTo(p.x, p.y);
+                        }
+                    });
+                    gc.stroke();
+                }
+                
+                // Vertical lines
+                const vPts = [];
+                const vImagePts = [];
+                for (let k = 0; k <= 80; k++) { // Increased resolution
+                    const u = i / 8;
+                    const v = k / 80;
+                    const pt = bilinearInterpolate(chessboard.corners, u, v);
+                    vPts.push(pt);
+                    const z = toComplex(pt.x, pt.y, 'domain');
+                    const w = userFn(z);
+                    if (isFinite(w.re) && isFinite(w.im)) {
+                        vImagePts.push(toCanvas(w, 'codomain'));
+                    }
+                }
+                
+                // Draw vertical line on domain
+                g.strokeStyle = '#00ff88';
+                g.lineWidth = 2;
+                g.beginPath();
+                if (vPts.length > 0) {
+                    g.moveTo(vPts[0].x, vPts[0].y);
+                    vPts.forEach(p => g.lineTo(p.x, p.y));
+                    g.stroke();
+                }
+                
+                // Draw transformed vertical line on codomain
+                if (vImagePts.length > 1) {
+                    gc.strokeStyle = '#00ff88';
+                    gc.lineWidth = 2;
+                    gc.beginPath();
+                    gc.moveTo(vImagePts[0].x, vImagePts[0].y);
+                    vImagePts.forEach(p => {
+                        if (isFinite(p.x) && isFinite(p.y)) {
+                            gc.lineTo(p.x, p.y);
+                        }
+                    });
+                    gc.stroke();
+                }
+            }
+            
+            // Draw corner handles
+            chessboard.corners.forEach((corner, i) => {
+                g.fillStyle = '#ff3333';
+                g.beginPath();
+                g.arc(corner.x, corner.y, 8, 0, 2 * Math.PI);
+                g.fill();
+                g.strokeStyle = '#fff';
+                g.lineWidth = 2;
+                g.stroke();
+            });
+        }
+
+        function getCornerAt(x, y) {
+            if (!chessboard) return -1;
+            for (let i = 0; i < chessboard.corners.length; i++) {
+                const corner = chessboard.corners[i];
+                const dist = Math.hypot(x - corner.x, y - corner.y);
+                if (dist < 15) return i;
+            }
+            return -1;
+        }
+
+        function getChessboardCenter() {
+            if (!chessboard) return { x: 0, y: 0 };
+            const corners = chessboard.corners;
+            return {
+                x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
+                y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
+            };
+        }
+
+        function moveChessboard(newCenter) {
+            if (!chessboard) return;
+            const currentCenter = getChessboardCenter();
+            const dx = newCenter.x - currentCenter.x;
+            const dy = newCenter.y - currentCenter.y;
+            
+            chessboard.corners.forEach(corner => {
+                corner.x += dx;
+                corner.y += dy;
+            });
+        }
+
+        function isInsideChessboard(x, y) {
+            if (!chessboard) return false;
+            // Simple bounding box check
+            const corners = chessboard.corners;
+            const minX = Math.min(...corners.map(c => c.x));
+            const maxX = Math.max(...corners.map(c => c.x));
+            const minY = Math.min(...corners.map(c => c.y));
+            const maxY = Math.max(...corners.map(c => c.y));
+            
+            return x >= minX && x <= maxX && y >= minY && y <= maxY;
+        }
+    </script>
+    <!-- Thank You Icon -->
+    <div id="thankYouIcon"
+        style="position:fixed; bottom:10px; right:10px; font-size:24px; cursor:pointer; color:red; z-index:100;">❤️
+    </div>
+    <div id="thankYouPopup"
+        style="display:none; position:fixed; bottom:40px; right:10px; background:rgba(0,0,0,0.8); color:#fff; padding:10px; border-radius:6px; max-width:220px; font-size:12px; z-index:100;">
+        Thank you for using Real Complex, I hope you find it useful. If you have any questions or bugs or love it enough
+        to support then contact me / paypal <a href="mailto:sickfiction@gmail.com"
+            style="color:#fff; text-decoration:underline;">sickfiction@gmail.com</a> Have a great day. <br />— James
+    </div>
+    <script>
+        document.getElementById('thankYouIcon').addEventListener('click', () => {
+            const popup = document.getElementById('thankYouPopup');
+            popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+        });
+    </script>
 </body>
+
 </html>
