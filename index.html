@@ -139,7 +139,7 @@
         <button id="clearBtn">Clear</button>
         <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
         <label>Zoom:
-            <input type="range" id="zoomSlider" min="0.1" max="10" step="0.1" value="1" style="width:100px" />
+            <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:100px" />
         </label>
     </div>
     <div id="tooltip" class="tooltip" style="display:none;"></div>
@@ -364,17 +364,17 @@
 
             const gridSize = chessboard.gridSize || 5;
 
-            // Always align to background grid lines
-            const snapX = Math.round(origin.domain.x / scale) * scale;
-            const snapY = Math.round(origin.domain.y / scale) * scale;
+            // Use actual origin position (no snapping)
+            const centerX = origin.domain.x;
+            const centerY = origin.domain.y;
             const extent = gridSize * scale;
 
-            // Update corners to match the new scale while staying aligned
+            // Update corners to match the new scale
             chessboard.corners = [
-                { x: snapX - extent, y: snapY - extent }, // top-left
-                { x: snapX + extent, y: snapY - extent }, // top-right
-                { x: snapX + extent, y: snapY + extent }, // bottom-right
-                { x: snapX - extent, y: snapY + extent }  // bottom-left
+                { x: centerX - extent, y: centerY - extent }, // top-left
+                { x: centerX + extent, y: centerY - extent }, // top-right
+                { x: centerX + extent, y: centerY + extent }, // bottom-right
+                { x: centerX - extent, y: centerY + extent }  // bottom-left
             ];
         }
         window.addEventListener('resize', resize);
@@ -403,22 +403,160 @@
         });
 
         function drawGrid(key) {
-            const c = canvases[key], g = ctx[key]; g.clearRect(0, 0, c.width, c.height);
+            const c = canvases[key], g = ctx[key]; 
+            g.clearRect(0, 0, c.width, c.height);
 
-            // Draw main axes even in chessboard mode
-            if (toolSelect.value === 'chessboard') {
-                g.strokeStyle = '#888'; g.lineWidth = 2;
-                g.beginPath(); g.moveTo(origin[key].x, 0); g.lineTo(origin[key].x, c.height); g.stroke();
-                g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
-                return;
+            // Calculate offset to align background grid with axes
+            const originX = origin[key].x;
+            const originY = origin[key].y;
+            const offsetX = originX % scale;
+            const offsetY = originY % scale;
+
+            // Draw background grid aligned with axes
+            g.strokeStyle = '#444'; 
+            g.lineWidth = 1;
+            
+            // Vertical lines
+            for (let x = offsetX; x < c.width; x += scale) { 
+                g.beginPath(); 
+                g.moveTo(x, 0); 
+                g.lineTo(x, c.height); 
+                g.stroke(); 
+            }
+            for (let x = offsetX - scale; x >= 0; x -= scale) { 
+                g.beginPath(); 
+                g.moveTo(x, 0); 
+                g.lineTo(x, c.height); 
+                g.stroke(); 
+            }
+            
+            // Horizontal lines
+            for (let y = offsetY; y < c.height; y += scale) { 
+                g.beginPath(); 
+                g.moveTo(0, y); 
+                g.lineTo(c.width, y); 
+                g.stroke(); 
+            }
+            for (let y = offsetY - scale; y >= 0; y -= scale) { 
+                g.beginPath(); 
+                g.moveTo(0, y); 
+                g.lineTo(c.width, y); 
+                g.stroke(); 
             }
 
-            g.strokeStyle = '#444'; g.lineWidth = 1;
-            for (let x = 0; x < c.width; x += scale) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, c.height); g.stroke(); }
-            for (let y = 0; y < c.height; y += scale) { g.beginPath(); g.moveTo(0, y); g.lineTo(c.width, y); g.stroke(); }
-            g.strokeStyle = '#888'; g.lineWidth = 2;
-            g.beginPath(); g.moveTo(origin[key].x, 0); g.lineTo(origin[key].x, c.height); g.stroke();
-            g.beginPath(); g.moveTo(0, origin[key].y); g.lineTo(c.width, origin[key].y); g.stroke();
+            // Draw main axes at true origin positions
+            g.strokeStyle = '#888'; 
+            g.lineWidth = 2;
+            g.beginPath(); 
+            g.moveTo(originX, 0); 
+            g.lineTo(originX, c.height); 
+            g.stroke();
+            g.beginPath(); 
+            g.moveTo(0, originY); 
+            g.lineTo(c.width, originY); 
+            g.stroke();
+
+            // Determine appropriate step size and unit scale based on zoom
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            let step, unitScale;
+            
+            if (zoomVal < 0.5) {
+                step = 1;
+                unitScale = 10; // Show 10, 20, 30, etc.
+            } else if (zoomVal < 1) {
+                step = 1;
+                unitScale = 5; // Show 5, 10, 15, etc.
+            } else if (zoomVal <= 1.5) {
+                step = 1;
+                unitScale = 1; // Show 1, 2, 3, etc.
+            } else if (zoomVal <= 2.5) {
+                step = 1;
+                unitScale = 0.5; // Show 0.5, 1.0, 1.5, etc.
+            } else {
+                step = 1;
+                unitScale = 0.2; // Show 0.2, 0.4, 0.6, etc.
+            }
+
+            // Get appropriate labels based on function
+            const fn = functionSelect.value;
+            const isComplex = ['z2', 'z3', 'z4', 'inv', 'log', 'exp', 'sin', 'cos', 'sqrt', 'mobius', 'quadratic'].includes(fn);
+            const realLabel = isComplex ? (key === 'domain' ? 'Re(z)' : 'Re(w)') : 'x';
+            const imagLabel = isComplex ? (key === 'domain' ? 'Im(z)' : 'Im(w)') : 'y';
+
+            // Add axis labels with scaled numbers
+            g.fillStyle = '#ffffff';
+            g.font = '12px Arial';
+            g.textAlign = 'center';
+            g.textBaseline = 'top';
+
+            // Draw real axis labels (horizontal) - only on grid lines
+            for (let x = offsetX; x <= c.width; x += scale * step) {
+                if (Math.abs(x - originX) < 5) continue; // Skip origin
+                
+                // Calculate the mathematical value 
+                const gridSteps = Math.round((x - originX) / scale);
+                const mathValue = gridSteps * unitScale;
+                
+                if (x >= 20 && x <= c.width - 20 && Math.abs(mathValue) <= 20 * unitScale) {
+                    const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
+                    g.fillText(displayValue, x, originY + 15);
+                }
+            }
+            
+            // Negative side for real axis
+            for (let x = offsetX - scale * step; x >= 0; x -= scale * step) {
+                if (Math.abs(x - originX) < 5) continue; // Skip origin
+                
+                const gridSteps = Math.round((x - originX) / scale);
+                const mathValue = gridSteps * unitScale;
+                
+                if (x >= 20 && x <= c.width - 20 && Math.abs(mathValue) <= 20 * unitScale) {
+                    const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
+                    g.fillText(displayValue, x, originY + 15);
+                }
+            }
+
+            // Draw imaginary axis labels (vertical) - only on grid lines
+            g.textAlign = 'left';
+            g.textBaseline = 'middle';
+            
+            for (let y = offsetY; y <= c.height; y += scale * step) {
+                if (Math.abs(y - originY) < 5) continue; // Skip origin
+                
+                // Calculate the mathematical value (negative because canvas y increases downward)
+                const gridSteps = -Math.round((y - originY) / scale);
+                const mathValue = gridSteps * unitScale;
+                
+                if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
+                    const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
+                    const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
+                    g.fillText(label, originX + 15, y);
+                }
+            }
+            
+            // Negative side for imaginary axis
+            for (let y = offsetY - scale * step; y >= 0; y -= scale * step) {
+                if (Math.abs(y - originY) < 5) continue; // Skip origin
+                
+                const gridSteps = -Math.round((y - originY) / scale);
+                const mathValue = gridSteps * unitScale;
+                
+                if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
+                    const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
+                    const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
+                    g.fillText(label, originX + 15, y);
+                }
+            }
+
+            // Draw axis labels
+            g.font = 'bold 14px Arial';
+            g.fillStyle = '#ffffff';
+            g.textAlign = 'right';
+            g.textBaseline = 'bottom';
+            g.fillText(realLabel, c.width - 10, originY - 10);
+            g.textAlign = 'left';
+            g.textBaseline = 'top';
+            g.fillText(imagLabel, originX + 10, 10);
         }
 
         // Smooth rendering optimization
@@ -1170,16 +1308,60 @@
             }
         });
 
-        // WASD controls for etch-a-sketch
+        // WASD controls for etch-a-sketch and arrow keys for panning
         window.addEventListener('keydown', evt => {
-            if (!etchActive) return;
-            const step = 1 / scale;
-            switch (evt.key.toLowerCase()) {
-                case 'w': etchCursor.im += step; break;
-                case 's': etchCursor.im -= step; break;
-                case 'a': etchCursor.re -= step; break;
-                case 'd': etchCursor.re += step; break;
-                default: return;
+            // Etch-a-sketch controls
+            if (etchActive) {
+                const step = 1 / scale;
+                switch (evt.key.toLowerCase()) {
+                    case 'w': etchCursor.im += step; break;
+                    case 's': etchCursor.im -= step; break;
+                    case 'a': etchCursor.re -= step; break;
+                    case 'd': etchCursor.re += step; break;
+                    default: return;
+                }
+            } else {
+                // Pan controls with arrow keys or WASD
+                const panStep = scale * 0.1; // Pan by 10% of a grid unit
+                let shouldRedraw = false;
+                
+                switch (evt.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                    case 'W':
+                        origin.domain.y += panStep;
+                        origin.codomain.y += panStep;
+                        shouldRedraw = true;
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                    case 'S':
+                        origin.domain.y -= panStep;
+                        origin.codomain.y -= panStep;
+                        shouldRedraw = true;
+                        break;
+                    case 'ArrowLeft':
+                    case 'a':
+                    case 'A':
+                        origin.domain.x += panStep;
+                        origin.codomain.x += panStep;
+                        shouldRedraw = true;
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                    case 'D':
+                        origin.domain.x -= panStep;
+                        origin.codomain.x -= panStep;
+                        shouldRedraw = true;
+                        break;
+                    default: return;
+                }
+                
+                if (shouldRedraw) {
+                    evt.preventDefault();
+                    redrawAll();
+                    return;
+                }
             }
             // Ensure we have an etch stroke initialized
             let stroke = strokes[strokes.length - 1];
@@ -1198,26 +1380,21 @@
 
         // Integer Grid functions (formerly chessboard)
         function initChessboard() {
-            // Create a grid that aligns with background grid lines
-            // Always align to the nearest grid lines regardless of scale
+            // Create a grid that uses the actual origin position (no snapping)
             const gridSize = 5; // Units from center
-            const centerX = origin.domain.x; // Use actual origin, not canvas center
+            const centerX = origin.domain.x; // Use actual origin
             const centerY = origin.domain.y;
 
-            // Snap to background grid lines - round to nearest scale unit
-            const snapX = Math.round(centerX / scale) * scale;
-            const snapY = Math.round(centerY / scale) * scale;
-
-            // Calculate grid extent in canvas coordinates aligned to background grid
+            // Calculate grid extent in canvas coordinates (no snapping)
             const extent = gridSize * scale;
 
             chessboard = {
                 gridSize: gridSize, // Number of units from center
                 corners: [
-                    { x: snapX - extent, y: snapY - extent }, // top-left (-5, +5i)
-                    { x: snapX + extent, y: snapY - extent }, // top-right (+5, +5i)
-                    { x: snapX + extent, y: snapY + extent }, // bottom-right (+5, -5i)
-                    { x: snapX - extent, y: snapY + extent }  // bottom-left (-5, -5i)
+                    { x: centerX - extent, y: centerY - extent }, // top-left (-5, +5i)
+                    { x: centerX + extent, y: centerY - extent }, // top-right (+5, +5i)
+                    { x: centerX + extent, y: centerY + extent }, // bottom-right (+5, -5i)
+                    { x: centerX - extent, y: centerY + extent }  // bottom-left (-5, -5i)
                 ]
             };
             redrawAll();
@@ -1350,42 +1527,6 @@
                 const offsetY = i === 0 || i === 1 ? -20 : 20;  // Top corners: up offset, bottom corners: down offset
                 g.fillText(labels[i], corner.x + offsetX, corner.y + offsetY);
             });
-
-            // Draw integer coordinate markers along the axes for better reference
-            g.fillStyle = '#aaaaaa';
-            g.font = '12px Arial';
-            g.textAlign = 'center';
-            g.textBaseline = 'top';
-
-            // Real axis labels (along horizontal center line) with scale information
-            const centerY = origin.domain.y; // Use actual origin Y
-            for (let i = -gridSize; i <= gridSize; i++) {
-                if (i === 0) continue; // Skip origin
-                const x = origin.domain.x + i * scale;
-                if (x >= 0 && x <= canvases.domain.width) {
-                    g.fillText(i.toString(), x, centerY + 15);
-                }
-            }
-
-            // Add scale indicator on x-axis
-            g.fillStyle = '#ffffff';
-            g.font = 'bold 14px Arial';
-            g.textAlign = 'right';
-            g.fillText(`Scale: 1 unit = ${scale}px`, canvases.domain.width - 10, centerY + 35);
-
-            // Imaginary axis labels (along vertical center line) 
-            g.fillStyle = '#aaaaaa';
-            g.font = '12px Arial';
-            g.textAlign = 'left';
-            g.textBaseline = 'middle';
-            const centerX = origin.domain.x; // Use actual origin X
-            for (let i = -gridSize; i <= gridSize; i++) {
-                if (i === 0) continue; // Skip origin
-                const y = origin.domain.y - i * scale;
-                if (y >= 0 && y <= canvases.domain.height) {
-                    g.fillText(i > 0 ? `${i}i` : `${i}i`, centerX + 15, y);
-                }
-            }
         }
 
         function getCornerAt(x, y) {
@@ -1410,19 +1551,19 @@
         function moveChessboard(newCenter) {
             if (!chessboard) return;
 
-            // Snap new center to background grid alignment
-            const snapX = Math.round(newCenter.x / scale) * scale;
-            const snapY = Math.round(newCenter.y / scale) * scale;
+            // Use new center position directly (no snapping)
+            const centerX = newCenter.x;
+            const centerY = newCenter.y;
 
             const gridSize = chessboard.gridSize || 5;
             const extent = gridSize * scale;
 
-            // Update corners to maintain grid alignment
+            // Update corners without snapping
             chessboard.corners = [
-                { x: snapX - extent, y: snapY - extent },
-                { x: snapX + extent, y: snapY - extent },
-                { x: snapX + extent, y: snapY + extent },
-                { x: snapX - extent, y: snapY + extent }
+                { x: centerX - extent, y: centerY - extent },
+                { x: centerX + extent, y: centerY - extent },
+                { x: centerX + extent, y: centerY + extent },
+                { x: centerX - extent, y: centerY + extent }
             ];
         }
 
