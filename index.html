@@ -132,6 +132,134 @@
             grid-column: 2;
             grid-row: 3;
         }
+
+        .help-btn {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 25px;
+            height: 25px;
+            background: rgba(200, 50, 50, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 20;
+            transition: all 0.3s;
+        }
+
+        .help-btn:hover {
+            background: rgba(220, 70, 70, 1);
+            transform: scale(1.1);
+        }
+
+        .hover-tooltip {
+            position: fixed;
+            bottom: 45px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #4ecdc4;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            max-width: 300px;
+            line-height: 1.4;
+            display: none;
+            z-index: 25;
+            border: 1px solid #4ecdc4;
+        }
+
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .help-content {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 30px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            color: #eee;
+            line-height: 1.6;
+            border: 2px solid #444;
+        }
+
+        .help-content h1 {
+            color: #ff6b6b;
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .help-content h2 {
+            color: #4ecdc4;
+            border-bottom: 2px solid #4ecdc4;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+
+        .help-content h3 {
+            color: #ffe66d;
+            margin-top: 20px;
+        }
+
+        .help-content code {
+            background: #333;
+            padding: 2px 5px;
+            border-radius: 3px;
+            color: #ff6b6b;
+        }
+
+        .help-content .math {
+            background: #2a2a2a;
+            padding: 10px;
+            border-left: 4px solid #4ecdc4;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .help-content .example {
+            background: #2a2a3a;
+            padding: 15px;
+            border-left: 4px solid #ffe66d;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .close-help {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 30px;
+            cursor: pointer;
+            color: #ff6b6b;
+        }
+
+        .canvas-help {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #4ecdc4;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            max-width: 90%;
+            text-align: center;
+            display: none;
+            z-index: 15;
+        }
     </style>
 </head>
 
@@ -197,6 +325,11 @@
             <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:100px" />
         </label>
     </div>
+    
+    <!-- Single Help Button -->
+    <button class="help-btn" id="helpBtn">?</button>
+    <div id="hoverTooltip" class="hover-tooltip"></div>
+    
     <div id="tooltip" class="tooltip" style="display:none;"></div>
     <div class="canvas-container">
         <div class="canvas-label">z plane</div>
@@ -216,6 +349,14 @@
             <div class="direction-btn left" data-direction="left">←</div>
             <div class="direction-btn right" data-direction="right">→</div>
             <div class="direction-btn down" data-direction="down">↓</div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="help-modal">
+        <div class="help-content">
+            <span class="close-help" id="closeHelp">&times;</span>
+            <div id="helpText"></div>
         </div>
     </div>
     <script>
@@ -447,7 +588,11 @@
         window.addEventListener('resize', resize);
         // zoom slider listener
         const zoomSlider = document.getElementById('zoomSlider');
-        zoomSlider.addEventListener('input', resize);
+        zoomSlider.addEventListener('input', () => {
+            resize();
+            // Update all transformations when zoom changes - this is crucial for proper visualization
+            updateAllTransformations();
+        });
 
         // Update transformations when function changes
         functionSelect.addEventListener('change', () => {
@@ -1785,7 +1930,7 @@
         functionSelect.addEventListener('change', clearTransformationCache);
 
         function showImageInstructions() {
-            alert('Image Mode: Drag and drop an image file onto either canvas to add it. The image will be transformed according to the selected function.');
+            showNotification('Image Mode: Drag & drop files OR paste from clipboard (Ctrl+V)! Images transform mathematically!', activeCanvas);
         }
 
         function drawTransformedImage(g, img) {
@@ -2063,6 +2208,88 @@
             });
         });
 
+        // Set up clipboard paste for images
+        let lastMousePos = { domain: { x: 0, y: 0 }, codomain: { x: 0, y: 0 } };
+
+        // Track mouse position for paste location
+        ['domain', 'codomain'].forEach(key => {
+            canvases[key].addEventListener('mousemove', (evt) => {
+                const pos = getPos(evt, key);
+                lastMousePos[key] = pos;
+            });
+        });
+
+        // Handle clipboard paste
+        window.addEventListener('paste', async (evt) => {
+            // Only handle paste when in image mode
+            if (toolSelect.value !== 'image') return;
+
+            evt.preventDefault();
+            const clipboardItems = evt.clipboardData.items;
+
+            for (let item of clipboardItems) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function (e) {
+                            const img = new Image();
+                            img.onload = function () {
+                                // Determine which canvas to paste to based on cursor position or default to domain
+                                let targetCanvas = 'domain';
+                                
+                                // Check if mouse is over codomain canvas
+                                const codomainRect = canvases.codomain.getBoundingClientRect();
+                                const domainRect = canvases.domain.getBoundingClientRect();
+                                
+                                // Use the canvas where the mouse was last active, or default to domain
+                                if (lastMousePos.codomain.x > 0 && activeCanvas === 'codomain') {
+                                    targetCanvas = 'codomain';
+                                }
+
+                                const pos = lastMousePos[targetCanvas];
+                                addImage(img, pos.x || canvases[targetCanvas].width / 2, pos.y || canvases[targetCanvas].height / 2, targetCanvas);
+                                
+                                // Show a brief notification
+                                showNotification('Image pasted from clipboard!', targetCanvas);
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    break; // Only handle the first image
+                }
+            }
+        });
+
+        // Show notification function
+        function showNotification(message, canvas = 'domain') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(76, 205, 196, 0.9);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 14px;
+                z-index: 100;
+                pointer-events: none;
+                transition: opacity 0.3s;
+            `;
+            notification.textContent = message;
+            
+            const container = canvases[canvas].parentElement;
+            container.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 2000);
+        }
+
         // Update text dimensions and transformations based on corners
         function updateTextFromCorners(textIndex) {
             const text = texts[textIndex];
@@ -2293,6 +2520,232 @@
 
         // Initialize directional controls
         setupDirectionalControls();
+
+        // ===== HELP SYSTEM =====
+        const helpModal = document.getElementById('helpModal');
+        const helpText = document.getElementById('helpText');
+        const closeHelp = document.getElementById('closeHelp');
+        const helpBtn = document.getElementById('helpBtn');
+        const hoverTooltip = document.getElementById('hoverTooltip');
+
+        // Main comprehensive help content
+        const mainHelpContent = `
+            <h1>Complex Function Visualizer - User Guide</h1>
+            
+            <p>This tool visualizes complex function transformations by showing how shapes drawn on the input plane (left) are mapped to the output plane (right) under various mathematical functions.</p>
+
+            <h2>How It Works</h2>
+            <p>The <strong>left canvas (z plane)</strong> is where you draw input shapes. The <strong>right canvas (w plane)</strong> shows how these shapes transform under the selected complex function. Each point z = x + yi in the left plane maps to w = f(z) in the right plane.</p>
+
+            <h2>Mathematical Functions</h2>
+            
+            <h3>z² (Squaring Function)</h3>
+            <div class="math">f(z) = z² = (x + yi)² = (x² - y²) + 2xyi</div>
+            <p>Doubles angles and squares magnitudes. Circles centered at origin become cardioids (figure-8 shapes). Straight lines through origin become parabolas.</p>
+
+            <h3>1/z (Reciprocal/Inversion)</h3>
+            <div class="math">f(z) = 1/z = (x - yi)/(x² + y²)</div>
+            <p>Inverts with respect to the unit circle. Points inside the unit circle map outside, and vice versa. Circles through the origin become straight lines.</p>
+
+            <h3>e^z (Exponential Function)</h3>
+            <div class="math">f(z) = e^z = e^x(cos(y) + i·sin(y))</div>
+            <p>Maps horizontal lines to circles centered at origin. Vertical lines become rays from origin. Fundamental in complex analysis.</p>
+
+            <h3>log(z) (Logarithm)</h3>
+            <div class="math">f(z) = log(z) = log|z| + i·arg(z)</div>
+            <p>Inverse of exponential. Maps circles to horizontal lines and rays to vertical lines. Multi-valued function with branch cuts.</p>
+
+            <h3>sin(z), cos(z) (Trigonometric Functions)</h3>
+            <p>Complex extensions of real trigonometric functions. Create hyperbolic-type transformations with interesting symmetries.</p>
+
+            <h3>√z (Square Root)</h3>
+            <div class="math">f(z) = √z = √|z| · e^(i·arg(z)/2)</div>
+            <p>Halves angles and takes square root of magnitudes. Two-valued function - use "Continuous inverse" toggle for smooth visualization.</p>
+
+            <h2>Drawing Tools</h2>
+
+            <h3>Basic Tools</h3>
+            <p><strong>Freehand:</strong> Draw arbitrary curves<br>
+            <strong>Line:</strong> Straight line segments<br>
+            <strong>Circle:</strong> Perfect circles<br>
+            <strong>Dot:</strong> Individual points with coordinate labels</p>
+
+            <h3>Parametric Shapes</h3>
+            <p><strong>Polygon:</strong> Regular n-sided polygons<br>
+            <strong>Star:</strong> Star polygons with n points<br>
+            <strong>Spiral:</strong> Logarithmic spirals<br>
+            <strong>Sine Wave:</strong> Sinusoidal curves</p>
+
+            <h3>Advanced Tools</h3>
+            <p><strong>Integer Grid:</strong> Shows coordinate transformation - essential for understanding function behavior<br>
+            <strong>Text:</strong> Renders text that transforms mathematically. Drag corners to warp before transformation<br>
+            <strong>Image:</strong> Import images via drag-drop or clipboard (Ctrl+V). Corner manipulation allows pre-transformation warping</p>
+
+            <h3>Etch-a-Sketch Mode</h3>
+            <p>Use WASD keys or arrow buttons for step-by-step drawing. Useful for precise path construction.</p>
+
+            <h2>Controls</h2>
+
+            <h3>Zoom</h3>
+            <p>Critical feature: Different zoom levels represent different complex number ranges. The same physical shape at different zooms will transform completely differently, revealing function behavior at various scales.</p>
+
+            <h3>Continuous Inverse</h3>
+            <p>For multi-valued functions (√z, z^(1/n)), this maintains branch continuity for smoother transformations.</p>
+
+            <h3>Navigation</h3>
+            <p>Arrow buttons or WASD keys pan the view (except in Etch mode where they control drawing).</p>
+
+            <h2>Usage Examples</h2>
+
+            <div class="example">
+                <h3>Understanding Function Behavior</h3>
+                <p>1. Select Integer Grid tool and z² function<br>
+                2. Observe how the coordinate grid transforms<br>
+                3. Notice angle doubling and the characteristic distortion</p>
+            </div>
+
+            <div class="example">
+                <h3>Exploring Singularities</h3>
+                <p>1. Draw circles of various sizes around origin with 1/z function<br>
+                2. Observe how circles through origin become lines<br>
+                3. See the behavior near z = 0 (the singularity)</p>
+            </div>
+
+            <div class="example">
+                <h3>Scale-Dependent Behavior</h3>
+                <p>1. Draw identical shapes at different zoom levels<br>
+                2. Compare transformations - local vs global behavior becomes apparent<br>
+                3. Essential for understanding analytic function properties</p>
+            </div>
+
+            <h2>Mathematical Concepts</h2>
+            <p>This tool demonstrates conformal mapping, complex analysis, and geometric function theory. Each transformation preserves angles locally (except at singular points) and reveals the geometric nature of complex functions.</p>
+
+            <p>Hover over the help button for context-sensitive information about the current function and tool combination.</p>
+        `;
+
+        // Event listeners for help system
+        helpBtn.addEventListener('click', () => {
+            helpText.innerHTML = mainHelpContent;
+            helpModal.style.display = 'block';
+        });
+
+        // Hover tooltip for contextual help
+        helpBtn.addEventListener('mouseenter', () => {
+            const contextHelp = getContextualHelpText();
+            hoverTooltip.innerHTML = contextHelp;
+            hoverTooltip.style.display = 'block';
+            
+            // Position tooltip above the button
+            const rect = helpBtn.getBoundingClientRect();
+            hoverTooltip.style.left = rect.left + 'px';
+            hoverTooltip.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+        });
+
+        helpBtn.addEventListener('mouseleave', () => {
+            hoverTooltip.style.display = 'none';
+        });
+
+        function getContextualHelpText() {
+            const fn = functionSelect.value;
+            const tool = toolSelect.value;
+            
+            let functionDesc = '';
+            let suggestion = '';
+            
+            switch(fn) {
+                case 'z2':
+                    functionDesc = "<strong>z² Function:</strong> Doubles angles, squares distances";
+                    suggestion = "Try drawing circles at origin or lines through center to see squaring effect";
+                    break;
+                case 'z3':
+                    functionDesc = "<strong>z³ Function:</strong> Triples angles, cubes distances";
+                    suggestion = "Draw shapes with rotational symmetry to see 3-fold multiplication";
+                    break;
+                case 'z4':
+                    functionDesc = "<strong>z⁴ Function:</strong> Quadruples angles, fourth power distances";
+                    suggestion = "Notice 4-fold symmetry in transformations";
+                    break;
+                case 'inv':
+                    functionDesc = "<strong>1/z Inversion:</strong> Swaps inside/outside unit circle";
+                    suggestion = "Draw circles through origin (become lines) or around origin";
+                    break;
+                case 'exp':
+                    functionDesc = "<strong>e^z Exponential:</strong> Horizontal lines → circles, vertical → rays";
+                    suggestion = "Try grid tool to see how rectangular coordinates transform";
+                    break;
+                case 'log':
+                    functionDesc = "<strong>log(z) Logarithm:</strong> Circles → horizontal lines, rays → vertical";
+                    suggestion = "Inverse of exponential - try concentric circles or radial lines";
+                    break;
+                case 'sin':
+                    functionDesc = "<strong>sin(z) Sine:</strong> Complex sine with hyperbolic behavior";
+                    suggestion = "Draw horizontal or vertical lines to see periodic/hyperbolic effects";
+                    break;
+                case 'cos':
+                    functionDesc = "<strong>cos(z) Cosine:</strong> Complex cosine function";
+                    suggestion = "Similar to sine with 90° phase shift";
+                    break;
+                case 'sqrt':
+                    functionDesc = "<strong>√z Square Root:</strong> Halves angles, square root distances";
+                    suggestion = "Enable continuous inverse for smooth branch behavior";
+                    break;
+                case 'zbar':
+                    functionDesc = "<strong>z̄ Conjugate:</strong> Reflects across real axis";
+                    suggestion = "Notice how shapes flip vertically";
+                    break;
+                case 'mobius':
+                    functionDesc = "<strong>Möbius Transform:</strong> (z-1)/(z+1) maps circles/lines";
+                    suggestion = "Draw circles to see circle-preserving property";
+                    break;
+                case 'quadratic':
+                    functionDesc = "<strong>z²+z Quadratic:</strong> Combination transformation";
+                    suggestion = "Observe asymmetric distortion from linear + quadratic terms";
+                    break;
+                default:
+                    functionDesc = `<strong>${fn} Function:</strong> Mathematical transformation`;
+                    suggestion = "Experiment with different shapes to understand behavior";
+            }
+
+            let toolInfo = '';
+            switch(tool) {
+                case 'chessboard':
+                    toolInfo = "<strong>Grid Tool:</strong> Shows coordinate transformation";
+                    break;
+                case 'image':
+                    toolInfo = "<strong>Image Tool:</strong> Paste (Ctrl+V) or drag images";
+                    break;
+                case 'text':
+                    toolInfo = "<strong>Text Tool:</strong> Add transformable text";
+                    break;
+                case 'etch':
+                    toolInfo = "<strong>Etch Tool:</strong> Use WASD/arrows to draw";
+                    break;
+                case 'circle':
+                    toolInfo = "<strong>Circle Tool:</strong> Perfect circles";
+                    break;
+                case 'line':
+                    toolInfo = "<strong>Line Tool:</strong> Straight lines";
+                    break;
+                case 'dot':
+                    toolInfo = "<strong>Dot Tool:</strong> Points with coordinates";
+                    break;
+                default:
+                    toolInfo = `<strong>${tool.charAt(0).toUpperCase() + tool.slice(1)} Tool:</strong> Drawing mode`;
+            }
+
+            return `${functionDesc}<br>${toolInfo}<br><em>Tip:</em> ${suggestion}<br><br><strong>Click for full help</strong>`;
+        }
+
+        closeHelp.addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+
+        helpModal.addEventListener('click', (evt) => {
+            if (evt.target === helpModal) {
+                helpModal.style.display = 'none';
+            }
+        });
     </script>
     <!-- Thank You Icon -->
     <div id="thankYouIcon"
