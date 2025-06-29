@@ -78,6 +78,14 @@
             background: rgba(255, 255, 255, 1);
         }
 
+        body.light-mode .direction-btn.center {
+            background: rgba(70, 130, 180, 0.9);
+        }
+
+        body.light-mode .direction-btn.center:hover {
+            background: rgba(70, 130, 180, 1);
+        }
+
         body.light-mode .hover-tooltip {
             background: rgba(255, 255, 255, 0.95);
             color: #2c5282;
@@ -141,23 +149,102 @@
 
         /* Mobile responsive adjustments for controls */
         @media (max-width: 768px) {
+            body {
+                margin: 0;
+                padding: 0;
+                overflow-x: hidden;
+                /* Remove body padding-bottom as it pushes content down */
+            }
+
             #controls {
-                padding: 3px 6px;
-                gap: 3px;
-                min-height: 36px;
-                background: rgba(0, 0, 0, 0.95);
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                padding: 8px 5px;
+                margin: 0;
+                background: rgba(40, 40, 40, 0.95);
+                backdrop-filter: blur(10px);
+                flex-wrap: wrap;
+                gap: 4px;
+                z-index: 1000;
+                font-size: 12px;
+                max-height: 25vh;
+                overflow-y: auto;
+                justify-content: space-between;
+            }
+
+            #controls label {
+                margin: 0 2px;
+                flex: 0 1 auto;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-size: 10px;
             }
 
             #controls select,
             #controls input,
             #controls button {
-                font-size: 10px;
-                padding: 2px 3px;
-                min-height: 22px;
+                font-size: 11px;
+                padding: 4px 6px;
+                margin: 2px 0;
+                border-radius: 4px;
+                min-height: 32px;
+                max-width: 80px;
             }
 
-            #controls label {
-                font-size: 10px;
+            #functionSelect,
+            #toolSelect {
+                max-width: 100px;
+            }
+
+            .canvas-container {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+                padding: 5px;
+                margin: 0;
+                position: relative;
+                min-height: 0;
+            }
+
+            .canvas-wrapper {
+                flex: 1;
+                position: relative;
+                min-height: 150px;
+            }
+
+            canvas {
+                width: 100% !important;
+                height: 100% !important;
+                border: 1px solid #666;
+                touch-action: none;
+            }
+
+            .canvas-label {
+                font-size: 12px;
+                padding: 3px 8px;
+                background: rgba(0, 0, 0, 0.8);
+                border-radius: 3px;
+                position: absolute;
+                top: 5px;
+                left: 5px;
+                z-index: 10;
+            }
+
+            .zoom-value {
+                font-size: 11px;
+                min-width: 35px;
+                text-align: center;
+            }
+
+            #tooltip {
+                font-size: 11px;
+                padding: 4px 8px;
+                max-width: 200px;
+                word-wrap: break-word;
             }
         }
 
@@ -182,7 +269,8 @@
                 width: 130px;
                 height: 130px;
                 gap: 8px;
-                bottom: 12px;
+                bottom: 75px;
+                /* Adjusted to match canvas spacing */
                 right: 12px;
             }
 
@@ -211,6 +299,11 @@
             #controls label {
                 font-size: 9px;
             }
+
+            .directional-controls {
+                bottom: 30px;
+                /* Back to normal positioning */
+            }
         }
 
         .main-content {
@@ -221,22 +314,73 @@
 
         @media (max-width: 768px) {
             .main-content {
-                height: calc(100vh - 36px);
+                height: calc(100vh - 25vh);
                 flex-direction: column;
+                position: fixed;
+                top: 25vh;
+                left: 0;
+                right: 0;
+                bottom: 0;
             }
         }
 
         @media (max-width: 480px) {
             .main-content {
-                height: calc(100vh - 32px);
+                height: calc(100vh - 25vh);
             }
         }
 
         /* Landscape mobile orientation */
         @media (max-width: 768px) and (orientation: landscape) {
-            .main-content {
+            #controls {
+                max-height: 30vh;
+                padding: 5px;
+            }
+
+            .canvas-container {
+                top: 30vh;
+                bottom: 50px;
+                /* Reduced to give more space to canvases in landscape */
                 flex-direction: row;
-                height: calc(100vh - 36px);
+                gap: 8px;
+            }
+
+            .directional-controls {
+                bottom: 60px;
+                /* Adjusted for landscape mode */
+            }
+
+            .canvas-wrapper {
+                flex: 1;
+                min-height: 120px;
+            }
+
+            .zoom-slider-container {
+                position: fixed;
+                bottom: 5px;
+                right: 5px;
+                left: auto;
+                transform: none;
+                flex-direction: column;
+                padding: 5px 8px;
+                writing-mode: vertical-lr !important;
+                text-orientation: mixed !important;
+                width: auto !important;
+                height: auto !important;
+            }
+
+            .zoom-slider-container input[type="range"] {
+                width: 80px;
+                -webkit-appearance: slider-vertical !important;
+                appearance: slider-vertical !important;
+                writing-mode: bt-lr !important;
+                height: 80px !important;
+            }
+
+            .zoom-slider-container label,
+            .zoom-slider-container .zoom-value {
+                writing-mode: vertical-lr !important;
+                text-orientation: mixed !important;
             }
         }
 
@@ -320,28 +464,41 @@
         /* Mobile responsive adjustments */
         @media (max-width: 768px) {
             .zoom-slider-container {
-                flex-direction: row;
-                writing-mode: initial;
-                text-orientation: initial;
-                min-width: auto;
-                max-width: none;
-                width: 100%;
-                height: 50px;
+                flex-direction: row !important;
+                writing-mode: initial !important;
+                text-orientation: initial !important;
+                min-width: auto !important;
+                max-width: none !important;
+                width: 100% !important;
+                height: 50px !important;
+                position: relative !important;
+                bottom: auto !important;
+                left: auto !important;
+                right: auto !important;
+                transform: none !important;
+                background: rgba(0, 0, 0, 0.1) !important;
+                padding: 8px !important;
+                border-radius: 0 !important;
+                backdrop-filter: none !important;
+                z-index: auto !important;
+                box-shadow: none !important;
             }
 
             .zoom-slider {
-                -webkit-appearance: auto;
-                appearance: auto;
-                writing-mode: initial;
-                width: 200px;
-                height: 10px;
+                -webkit-appearance: auto !important;
+                appearance: auto !important;
+                writing-mode: initial !important;
+                width: 200px !important;
+                height: 10px !important;
+                margin: 0 !important;
             }
 
             .zoom-label,
             .zoom-value {
-                writing-mode: initial;
-                text-orientation: initial;
-                min-height: auto;
+                writing-mode: initial !important;
+                text-orientation: initial !important;
+                min-height: auto !important;
+                font-size: 12px !important;
             }
 
             .canvas-container {
@@ -417,7 +574,8 @@
                 width: 120px;
                 height: 120px;
                 gap: 10px;
-                bottom: 10px;
+                bottom: 70px;
+                /* Reduced to match canvas spacing */
                 right: 10px;
                 background: rgba(0, 0, 0, 0.3);
                 border-radius: 8px;
@@ -438,7 +596,8 @@
                 width: 140px;
                 height: 140px;
                 gap: 12px;
-                bottom: 15px;
+                bottom: 85px;
+                /* Adjusted for better spacing on small screens */
                 right: 15px;
             }
 
@@ -491,6 +650,17 @@
         .direction-btn.down {
             grid-column: 2;
             grid-row: 3;
+        }
+
+        .direction-btn.center {
+            grid-column: 2;
+            grid-row: 2;
+            font-size: 16px;
+            background: rgba(70, 130, 180, 0.9);
+        }
+
+        .direction-btn.center:hover {
+            background: rgba(70, 130, 180, 1);
         }
 
         .help-btn {
@@ -746,6 +916,30 @@
 </head>
 
 <body>
+    <!-- Mobile Disclaimer Modal -->
+    <div id="mobileDisclaimer"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; color: white; padding: 20px; box-sizing: border-box;">
+        <div style="max-width: 400px; margin: 50px auto; text-align: center;">
+            <h2 style="color: #ff6b6b; margin-bottom: 20px;">📱 Mobile Notice</h2>
+            <p style="font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
+                This Complex Function Visualizer is designed for <strong>desktop computers</strong> with mouse and
+                keyboard for the best experience.
+            </p>
+            <p style="font-size: 14px; line-height: 1.5; margin-bottom: 30px;">
+                On mobile, some features may be limited and the interface condensed, but you can still explore complex
+                functions! Use two fingers to pan/zoom and one finger to draw.
+            </p>
+            <button id="continueAnyway"
+                style="background: #4ecdc4; color: white; border: none; padding: 15px 30px; border-radius: 25px; font-size: 16px; cursor: pointer; margin-right: 10px;">
+                Continue Anyway 📱
+            </button>
+            <button id="goToDesktop"
+                style="background: #ffe66d; color: #333; border: none; padding: 15px 30px; border-radius: 25px; font-size: 16px; cursor: pointer;">
+                Use Desktop Instead 💻
+            </button>
+        </div>
+    </div>
+
     <div id="controls">
         <label>Function:
             <select id="functionSelect">
@@ -802,6 +996,7 @@
                 <option value="Comic Sans MS">Comic</option>
             </select>
         </label>
+        <button id="undoBtn">Undo</button>
         <button id="clearBtn">Clear</button>
         <label><input type="checkbox" id="continuousToggle" checked /> Continuous</label>
         <label><input type="checkbox" id="snapToGridToggle" /> Snap grid</label>
@@ -822,6 +1017,7 @@
             <div class="directional-controls">
                 <div class="direction-btn up" data-direction="up">↑</div>
                 <div class="direction-btn left" data-direction="left">←</div>
+                <div class="direction-btn center" id="resetBtn">⌂</div>
                 <div class="direction-btn right" data-direction="right">→</div>
                 <div class="direction-btn down" data-direction="down">↓</div>
             </div>
@@ -840,6 +1036,7 @@
             <div class="directional-controls">
                 <div class="direction-btn up" data-direction="up">↑</div>
                 <div class="direction-btn left" data-direction="left">←</div>
+                <div class="direction-btn center" id="resetBtn2">⌂</div>
                 <div class="direction-btn right" data-direction="right">→</div>
                 <div class="direction-btn down" data-direction="down">↓</div>
             </div>
@@ -866,6 +1063,9 @@
         const fontColorInput = document.getElementById('fontColorInput');
         const fontFamilyInput = document.getElementById('fontFamilyInput');
         const clearBtn = document.getElementById('clearBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const resetBtn2 = document.getElementById('resetBtn2');
         const continuousToggle = document.getElementById('continuousToggle');
         const snapToGridToggle = document.getElementById('snapToGridToggle');
         const tooltip = document.getElementById('tooltip');
@@ -889,6 +1089,9 @@
         // Initialize mobile-specific features
         function initMobileFeatures() {
             if (isMobileDevice()) {
+                // Show mobile disclaimer
+                showMobileDisclaimer();
+
                 // Add mobile class to body for additional styling
                 document.body.classList.add('mobile-device');
 
@@ -922,12 +1125,30 @@
                         canvas.style.transform = 'translateZ(0)'; // Enable hardware acceleration
                     });
                 }
+            }
+        }
 
-                // Show mobile help hint initially
+        // Mobile disclaimer functionality
+        function showMobileDisclaimer() {
+            const disclaimer = document.getElementById('mobileDisclaimer');
+            disclaimer.style.display = 'block';
+
+            document.getElementById('continueAnyway').onclick = () => {
+                disclaimer.style.display = 'none';
+                // Show mobile help hint after disclaimer
                 setTimeout(() => {
                     showNotification('Tip: Use 2 fingers to pan/zoom, 1 finger to draw!', 'domain');
-                }, 1000);
-            }
+                }, 500);
+            };
+
+            document.getElementById('goToDesktop').onclick = () => {
+                const isConfirmed = confirm('This will redirect you to learn about accessing this tool on a desktop computer.');
+                if (isConfirmed) {
+                    // Could redirect to a help page or show more info
+                    alert('For the best experience, open this page on a desktop or laptop computer with a mouse and keyboard.');
+                    disclaimer.style.display = 'none';
+                }
+            };
         }
 
         // Polyfill for older browsers
@@ -1370,7 +1591,7 @@
             // Get actual canvas element sizes after CSS layout
             const domainRect = canvases.domain.getBoundingClientRect();
             const codomainRect = canvases.codomain.getBoundingClientRect();
-            
+
             const newDomainWidth = Math.floor(domainRect.width);
             const newDomainHeight = Math.floor(domainRect.height);
             const newCodomainWidth = Math.floor(codomainRect.width);
@@ -1830,7 +2051,9 @@
 
             dots.forEach(d => {
                 ['domain', 'codomain'].forEach((key, idx) => {
-                    const g = ctx[key], lab = (idx === 0 ? d.label.dom : invFn(d.label.dom)), p = (idx === 0 ? { x: d.x, y: d.y } : toCanvas(lab, key));
+                    const g = ctx[key];
+                    const lab = (idx === 0 ? d.label.dom : userFn(d.label.dom));
+                    const p = toCanvas(lab, key);
                     g.fillStyle = isDarkMode ? 'yellow' : '#ff6600';
                     g.beginPath();
                     g.arc(p.x, p.y, 5, 0, 2 * Math.PI);
@@ -1843,49 +2066,20 @@
                         outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)'
                     };
 
-                    // Calculate display coordinates that match grid labels EXACTLY
-                    const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
-                    let unitScale;
-                    if (zoomVal < 0.5) {
-                        unitScale = 10;
-                    } else if (zoomVal < 1) {
-                        unitScale = 5;
-                    } else if (zoomVal <= 1.5) {
-                        unitScale = 1;
-                    } else if (zoomVal <= 2.5) {
-                        unitScale = 0.5;
-                    } else {
-                        unitScale = 0.2;
-                    }
-
-                    const originX = origin[key].x;
-                    const originY = origin[key].y;
-                    
-                    // Calculate grid steps EXACTLY like grid labels do
-                    const gridStepsX = Math.round((p.x - originX) / scale);
-                    const gridStepsY = -Math.round((p.y - originY) / scale);
-                    
-                    // Apply unit scaling EXACTLY like grid labels do
-                    const displayX = gridStepsX * unitScale;
-                    const displayY = gridStepsY * unitScale;
-
+                    // Use actual mathematical coordinates (not grid-snapped)
+                    const precision = 3; // Always use 3 decimal places for dots
                     let labelText;
-                    const precision = unitScale < 1 ? 1 : 0;
+
                     if (idx === 0) {
-                        // Domain (input) dot
+                        // Domain (input) dot - use the actual mathematical coordinates
                         const realPart = labels.inputRealLabel.replace(/[()]/g, '');
                         const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
-                        labelText = `${realPart}=${displayX.toFixed(precision)}, ${imagPart}=${displayY.toFixed(precision)}`;
+                        labelText = `${realPart}=${lab.re.toFixed(precision)}, ${imagPart}=${lab.im.toFixed(precision)}`;
                     } else {
-                        // Codomain (output) dot - use transformed coordinates
+                        // Codomain (output) dot - use the actual transformed mathematical coordinates
                         const realPart = labels.outputRealLabel.replace(/[()]/g, '');
                         const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
-                        // For codomain, calculate display coordinates based on the transformed position
-                        const codomainGridStepsX = Math.round((p.x - origin.codomain.x) / scale);
-                        const codomainGridStepsY = -Math.round((p.y - origin.codomain.y) / scale);
-                        const codomainDisplayX = codomainGridStepsX * unitScale;
-                        const codomainDisplayY = codomainGridStepsY * unitScale;
-                        labelText = `${realPart}=${codomainDisplayX.toFixed(precision)}, ${imagPart}=${codomainDisplayY.toFixed(precision)}`;
+                        labelText = `${realPart}=${lab.re.toFixed(precision)}, ${imagPart}=${lab.im.toFixed(precision)}`;
                     }
 
                     g.fillText(labelText, p.x + 6, p.y - 6);
@@ -2007,7 +2201,15 @@
                         if (toolSelect.value === 'image') {
                             g.strokeStyle = '#00ff88';
                             g.lineWidth = 2;
-                            g.strokeRect(img.x - img.width / 2 - 2, img.y - img.height / 2 - 2, img.width + 4, img.height + 4);
+
+                            // Draw border following the actual corners (warped shape)
+                            g.beginPath();
+                            g.moveTo(img.corners[0].x, img.corners[0].y); // top-left
+                            g.lineTo(img.corners[1].x, img.corners[1].y); // top-right
+                            g.lineTo(img.corners[2].x, img.corners[2].y); // bottom-right
+                            g.lineTo(img.corners[3].x, img.corners[3].y); // bottom-left
+                            g.closePath();
+                            g.stroke();
 
                             // Draw corners when in image mode
                             img.corners.forEach((corner, i) => {
@@ -2207,7 +2409,7 @@
 
             if (toolSelect.value === 'dot') {
                 const z = toComplex(p.x, p.y, activeCanvas);
-                dots.push({ canvas: activeCanvas, x: p.x, y: p.y, label: { dom: z } });
+                dots.push({ canvas: activeCanvas, label: { dom: z } });
                 redrawAll();
                 return;
             }
@@ -2499,7 +2701,7 @@
 
             // Get canvas bounding rectangle
             const rect = canvas.getBoundingClientRect();
-            
+
             // Calculate position relative to canvas top-left corner
             // Use Math.round to ensure pixel-perfect positioning
             const x = Math.round(clientX - rect.left);
@@ -2769,7 +2971,7 @@
         });
         canvases.domain.addEventListener('mousemove', evt => {
             const p = getPos(evt, 'domain');
-            
+
             // Calculate the precise mathematical coordinate (not snapped to grid)
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             let unitScale;
@@ -2787,7 +2989,7 @@
 
             const originX = origin.domain.x;
             const originY = origin.domain.y;
-            
+
             // Calculate precise coordinates (not rounded to grid)
             const preciseX = ((p.x - originX) / scale) * unitScale;
             const preciseY = -((p.y - originY) / scale) * unitScale;
@@ -2799,7 +3001,7 @@
             const labels = window.currentLabels || { inputRealLabel: 'Re(z)', inputImagLabel: 'Im(z)' };
             const realPart = labels.inputRealLabel.replace(/[()]/g, '');
             const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
-            
+
             // Show precise coordinates with 3 decimal places
             tooltip.textContent = `${realPart}=${preciseX.toFixed(3)}, ${imagPart}=${preciseY.toFixed(3)}`;
 
@@ -2830,7 +3032,7 @@
         });
         canvases.codomain.addEventListener('mousemove', evt => {
             const p = getPos(evt, 'codomain');
-            
+
             // Calculate the precise mathematical coordinate (not snapped to grid)
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             let unitScale;
@@ -2848,7 +3050,7 @@
 
             const originX = origin.codomain.x;
             const originY = origin.codomain.y;
-            
+
             // Calculate precise coordinates (not rounded to grid)
             const preciseX = ((p.x - originX) / scale) * unitScale;
             const preciseY = -((p.y - originY) / scale) * unitScale;
@@ -2860,7 +3062,7 @@
             const labels = window.currentLabels || { outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)' };
             const realPart = labels.outputRealLabel.replace(/[()]/g, '');
             const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
-            
+
             // Show precise coordinates with 3 decimal places
             tooltip.textContent = `${realPart}=${preciseX.toFixed(3)}, ${imagPart}=${preciseY.toFixed(3)}`;
 
@@ -2891,12 +3093,62 @@
         });
         canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
         clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; texts.length = 0; images.length = 0; redrawAll(); });
+
+        // Undo functionality - removes the most recent item
+        undoBtn.addEventListener('click', () => {
+            if (strokes.length > 0) {
+                strokes.pop();
+            } else if (dots.length > 0) {
+                dots.pop();
+            } else if (texts.length > 0) {
+                texts.pop();
+            } else if (images.length > 0) {
+                images.pop();
+            }
+            redrawAll();
+        });
+
+        // Reset/Center functionality - centers the grid on both canvases
+        function resetGridCenter() {
+            // Reset origins to canvas centers
+            origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
+            origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
+
+            // Update chessboard if it exists
+            if (chessboard && toolSelect.value === 'chessboard') {
+                updateChessboardScale();
+            }
+
+            // Update all transformations and redraw
+            updateAllTransformations();
+            redrawAll();
+        }
+
+        resetBtn.addEventListener('click', resetGridCenter);
+        resetBtn2.addEventListener('click', resetGridCenter);
         snapToGridToggle.addEventListener('change', (e) => {
             snapToGrid = e.target.checked;
         });
 
         // Track modifier keys for different drag modes
         window.addEventListener('keydown', (evt) => {
+            // Handle Ctrl+Z for undo
+            if (evt.ctrlKey && evt.key === 'z') {
+                evt.preventDefault(); // Prevent browser default undo
+                // Trigger undo function
+                if (strokes.length > 0) {
+                    strokes.pop();
+                } else if (dots.length > 0) {
+                    dots.pop();
+                } else if (texts.length > 0) {
+                    texts.pop();
+                } else if (images.length > 0) {
+                    images.pop();
+                }
+                redrawAll();
+                return;
+            }
+
             if (evt.key === 'Shift') isShiftPressed = true;
             if (evt.key === 'Control') isCtrlPressed = true;
         });
@@ -3901,6 +4153,11 @@
         // Directional button controls for both panning and etch-a-sketch
         function setupDirectionalControls() {
             document.querySelectorAll('.direction-btn').forEach(btn => {
+                // Skip center reset buttons - they have their own handlers
+                if (btn.classList.contains('center')) {
+                    return;
+                }
+
                 // Mouse click
                 btn.addEventListener('click', (evt) => {
                     evt.preventDefault();
@@ -4005,19 +4262,8 @@
                 updateImageTransformation(img);
             });
 
-            // Update dots (they need to be recalculated for the new view)
-            dots.forEach(dot => {
-                if (dot.label && dot.label.dom) {
-                    const z = dot.label.dom;
-                    const w = userFn(z);
-                    dot.label.cod = w;
-                    
-                    // Update canvas positions for the dot based on its mathematical coordinates
-                    const domainPos = toCanvas(z, 'domain');
-                    dot.x = domainPos.x;
-                    dot.y = domainPos.y;
-                }
-            });
+            // Dots don't need updating as they are stored in mathematical coordinates
+            // and canvas positions are calculated on each render
         }
 
         function updateStrokeTransformations() {
