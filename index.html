@@ -3,19 +3,33 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Conformal Mapping Visualizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Complex Function Visualizer</title>
     <style>
+        html,
         body {
             margin: 0;
             padding: 0;
             display: flex;
+            flex-direction: column;
             height: 100vh;
             background: #111;
             color: #eee;
-            font-family: sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
+            /* Prevent zoom on double-tap */
+            touch-action: manipulation;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            -ms-touch-action: manipulation;
         }
 
         /* Light mode styles */
@@ -79,36 +93,125 @@
         }
 
         #controls {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            width: 100%;
             background: rgba(0, 0, 0, 0.8);
-            padding: 10px;
-            border-radius: 6px;
+            padding: 4px 8px;
             z-index: 10;
             display: flex;
-            gap: 8px;
+            gap: 4px;
             align-items: center;
+            justify-content: space-evenly;
+            flex-wrap: nowrap;
+            border-bottom: 1px solid #444;
+            position: relative;
+            min-height: 40px;
+            overflow-x: auto;
+            /* Hide scrollbars but allow scrolling */
+            scrollbar-width: none;
+            /* Firefox */
+            -ms-overflow-style: none;
+            /* IE/Edge */
         }
 
-        /* Mobile improvements for controls */
+        #controls::-webkit-scrollbar {
+            display: none;
+            /* Chrome/Safari */
+        }
+
+        #controls label {
+            font-size: 11px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        #controls select,
+        #controls input,
+        #controls button {
+            font-size: 11px;
+            padding: 2px 4px;
+            min-height: 24px;
+            border-radius: 3px;
+            border: none;
+            touch-action: manipulation;
+            flex-shrink: 0;
+        }
+
+        /* Hide zoom slider on mobile since touch gestures work */
         @media (max-width: 768px) {
+
+            #zoomSliderLabel,
+            #zoomSlider {
+                display: none;
+            }
+
             #controls {
-                top: 5px;
-                left: 5px;
-                right: 5px;
-                transform: none;
-                flex-wrap: wrap;
-                font-size: 12px;
-                padding: 8px;
-                gap: 5px;
+                padding: 3px 6px;
+                gap: 3px;
+                min-height: 36px;
+                background: rgba(0, 0, 0, 0.95);
             }
 
             #controls select,
-            #controls input {
-                font-size: 12px;
+            #controls input,
+            #controls button {
+                font-size: 10px;
+                padding: 2px 3px;
+                min-height: 22px;
+            }
+
+            #controls label {
+                font-size: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #controls {
+                font-size: 10px;
+                padding: 2px 4px;
+                gap: 2px;
+                min-height: 32px;
+            }
+
+            #controls select,
+            #controls input,
+            #controls button {
+                font-size: 9px;
                 padding: 1px 2px;
+                min-height: 20px;
+            }
+
+            #controls label {
+                font-size: 9px;
+            }
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 40px);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                height: calc(100vh - 36px);
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-content {
+                height: calc(100vh - 32px);
+            }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .main-content {
+                flex-direction: row;
+                height: calc(100vh - 36px);
             }
         }
 
@@ -136,6 +239,21 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            min-width: 0;
+            /* Prevent flex overflow */
+        }
+
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .canvas-container {
+                flex: 1;
+                min-height: 0;
+            }
+
+            .canvas-label {
+                font-size: 12px;
+                margin-bottom: 2px;
+            }
         }
 
         .canvas-label {
@@ -152,9 +270,13 @@
             touch-action: none;
             -webkit-touch-callout: none;
             -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
+            /* Prevent zoom on double tap */
+            -ms-touch-action: manipulation;
+            -webkit-user-drag: none;
         }
 
         .domain {
@@ -193,32 +315,38 @@
         /* Make directional controls more visible on mobile */
         @media (max-width: 768px) {
             .directional-controls {
-                width: 100px;
-                height: 100px;
-                gap: 8px;
-                bottom: 80px;
-                right: 15px;
+                width: 120px;
+                height: 120px;
+                gap: 10px;
+                bottom: 10px;
+                right: 10px;
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 8px;
+                padding: 5px;
             }
 
             .direction-btn {
-                font-size: 20px;
+                font-size: 24px;
                 border-width: 2px;
                 background: rgba(0, 0, 0, 0.9);
+                min-height: 35px;
+                border-radius: 6px;
             }
         }
 
         @media (max-width: 480px) {
             .directional-controls {
-                width: 120px;
-                height: 120px;
-                gap: 10px;
-                bottom: 90px;
-                right: 10px;
+                width: 140px;
+                height: 140px;
+                gap: 12px;
+                bottom: 15px;
+                right: 15px;
             }
 
             .direction-btn {
-                font-size: 24px;
+                font-size: 28px;
                 border-width: 3px;
+                min-height: 40px;
             }
         }
 
@@ -268,36 +396,40 @@
 
         .help-btn {
             position: fixed;
-            bottom: 10px;
-            left: 10px;
-            width: 25px;
-            height: 25px;
+            bottom: 15px;
+            left: 15px;
+            width: 40px;
+            height: 40px;
             background: rgba(200, 50, 50, 0.9);
             color: white;
             border: none;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: bold;
             z-index: 20;
             transition: all 0.3s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .export-btn {
             position: fixed;
-            bottom: 10px;
-            left: 45px;
-            width: 25px;
-            height: 25px;
+            bottom: 15px;
+            left: 65px;
+            width: 40px;
+            height: 40px;
             background: rgba(50, 150, 50, 0.9);
             color: white;
             border: none;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 16px;
             font-weight: bold;
             z-index: 20;
             transition: all 0.3s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .export-btn:hover {
@@ -347,6 +479,7 @@
             background: rgba(0, 0, 0, 0.9);
             z-index: 1000;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .help-content {
@@ -358,6 +491,90 @@
             color: #eee;
             line-height: 1.6;
             border: 2px solid #444;
+        }
+
+        /* Mobile help modal improvements */
+        @media (max-width: 768px) {
+            .help-content {
+                margin: 10px;
+                padding: 20px;
+                max-width: none;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+
+            .help-content h1 {
+                font-size: 22px;
+                margin-bottom: 15px;
+            }
+
+            .help-content h2 {
+                font-size: 18px;
+                margin-top: 20px;
+            }
+
+            .help-content h3 {
+                font-size: 16px;
+                margin-top: 15px;
+            }
+        }
+
+        .close-help {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(200, 50, 50, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+            touch-action: manipulation;
+        }
+
+        /* Mobile device specific improvements */
+        body.mobile-device {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body.mobile-device .direction-btn {
+            border-width: 2px;
+            font-size: 20px;
+            min-width: 35px;
+            min-height: 35px;
+        }
+
+        body.mobile-device .help-btn,
+        body.mobile-device .export-btn {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        body.mobile-device #controls {
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Prevent text selection on touch devices */
+        .mobile-device * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .mobile-device input,
+        .mobile-device textarea {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
 
         .help-content h1 {
@@ -445,6 +662,7 @@
                 <option value="zbar">conjugate(z)</option>
                 <option value="mobius">(z-1)/(z+1)</option>
                 <option value="quadratic">z²+z</option>
+                <option value="real_poly">x²-y² (real part only)</option>
             </select>
         </label>
         <label>Tool:
@@ -465,66 +683,69 @@
         </label>
         <label id="paramLabel" style="display:none">
             Turns/Sides:
-            <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:50px" />
+            <input type="number" id="paramInput" value="5" min="3" max="20" step="1" style="width:35px" />
         </label>
         <label id="textLabel" style="display:none">
             Text:
-            <input type="text" id="textInput" value="Hello" placeholder="Enter text" style="width:80px" />
+            <input type="text" id="textInput" value="Hello" placeholder="Enter text" style="width:60px" />
             Size:
-            <input type="number" id="fontSizeInput" value="24" min="8" max="72" step="1" style="width:40px" />
+            <input type="number" id="fontSizeInput" value="24" min="8" max="72" step="1" style="width:30px" />
             Color:
-            <input type="color" id="fontColorInput" value="#ffffff" style="width:30px" />
+            <input type="color" id="fontColorInput" value="#ffffff" style="width:25px" />
             Font:
-            <select id="fontFamilyInput" style="width:80px">
+            <select id="fontFamilyInput" style="width:60px">
                 <option value="Arial">Arial</option>
                 <option value="Times">Times</option>
                 <option value="Courier">Courier</option>
                 <option value="Georgia">Georgia</option>
                 <option value="Verdana">Verdana</option>
                 <option value="Impact">Impact</option>
-                <option value="Comic Sans MS">Comic Sans</option>
+                <option value="Comic Sans MS">Comic</option>
             </select>
         </label>
         <button id="clearBtn">Clear</button>
-        <label><input type="checkbox" id="continuousToggle" checked /> Continuous inverse</label>
-        <label>Zoom:
-            <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:100px" />
+        <label><input type="checkbox" id="continuousToggle" checked /> Continuous</label>
+        <label><input type="checkbox" id="snapToGridToggle" /> Snap grid</label>
+        <label id="zoomSliderLabel">Zoom:
+            <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:80px" />
         </label>
         <button id="themeToggle"
-            style="background: #444; color: #eee; border: 1px solid #666; padding: 5px 10px; border-radius: 4px; cursor: pointer;">🌙</button>
+            style="background: #444; color: #eee; border: 1px solid #666; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px;">🌙</button>
     </div>
 
-    <!-- Single Help Button -->
-    <button class="help-btn" id="helpBtn">?</button>
-    <button class="export-btn" id="exportBtn">⬇</button>
-    <div id="hoverTooltip" class="hover-tooltip"></div>
+    <div class="main-content">
+        <!-- Single Help Button -->
+        <button class="help-btn" id="helpBtn">?</button>
+        <button class="export-btn" id="exportBtn">⬇</button>
+        <div id="hoverTooltip" class="hover-tooltip"></div>
 
-    <div id="tooltip" class="tooltip" style="display:none;"></div>
-    <div class="canvas-container">
-        <div class="canvas-label">z plane</div>
-        <canvas id="canvasDomain" class="domain"></canvas>
-        <div class="directional-controls">
-            <div class="direction-btn up" data-direction="up">↑</div>
-            <div class="direction-btn left" data-direction="left">←</div>
-            <div class="direction-btn right" data-direction="right">→</div>
-            <div class="direction-btn down" data-direction="down">↓</div>
+        <div id="tooltip" class="tooltip" style="display:none;"></div>
+        <div class="canvas-container">
+            <div class="canvas-label" id="domainLabel">Input Plane</div>
+            <canvas id="canvasDomain" class="domain"></canvas>
+            <div class="directional-controls">
+                <div class="direction-btn up" data-direction="up">↑</div>
+                <div class="direction-btn left" data-direction="left">←</div>
+                <div class="direction-btn right" data-direction="right">→</div>
+                <div class="direction-btn down" data-direction="down">↓</div>
+            </div>
         </div>
-    </div>
-    <div class="canvas-container">
-        <div class="canvas-label">w plane</div>
-        <canvas id="canvasCodomain" class="codomain"></canvas>
-        <div class="directional-controls">
-            <div class="direction-btn up" data-direction="up">↑</div>
-            <div class="direction-btn left" data-direction="left">←</div>
-            <div class="direction-btn right" data-direction="right">→</div>
-            <div class="direction-btn down" data-direction="down">↓</div>
+        <div class="canvas-container">
+            <div class="canvas-label" id="codomainLabel">Output Plane</div>
+            <canvas id="canvasCodomain" class="codomain"></canvas>
+            <div class="directional-controls">
+                <div class="direction-btn up" data-direction="up">↑</div>
+                <div class="direction-btn left" data-direction="left">←</div>
+                <div class="direction-btn right" data-direction="right">→</div>
+                <div class="direction-btn down" data-direction="down">↓</div>
+            </div>
         </div>
     </div>
 
     <!-- Help Modal -->
     <div id="helpModal" class="help-modal">
         <div class="help-content">
-            <span class="close-help" id="closeHelp">&times;</span>
+            <button class="close-help" id="closeHelp">×</button>
             <div id="helpText"></div>
         </div>
     </div>
@@ -542,11 +763,233 @@
         const fontFamilyInput = document.getElementById('fontFamilyInput');
         const clearBtn = document.getElementById('clearBtn');
         const continuousToggle = document.getElementById('continuousToggle');
+        const snapToGridToggle = document.getElementById('snapToGridToggle');
         const tooltip = document.getElementById('tooltip');
         const themeToggle = document.getElementById('themeToggle');
+        const domainLabel = document.getElementById('domainLabel');
+        const codomainLabel = document.getElementById('codomainLabel');
 
         // Theme management
         let isDarkMode = true;
+
+        // Mobile device detection and optimization
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (window.innerWidth <= 768 && 'ontouchstart' in window);
+        }
+
+        function isIOSDevice() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        }
+
+        // Initialize mobile-specific features
+        function initMobileFeatures() {
+            if (isMobileDevice()) {
+                // Add mobile class to body for additional styling
+                document.body.classList.add('mobile-device');
+
+                // Disable double-tap zoom on buttons and controls
+                document.querySelectorAll('button, select, input').forEach(el => {
+                    el.style.touchAction = 'manipulation';
+                });
+
+                // iOS-specific fixes
+                if (isIOSDevice()) {
+                    // Prevent iOS Safari from zooming on input focus
+                    document.querySelectorAll('input, select').forEach(el => {
+                        if (el.style.fontSize === '' || parseInt(el.style.fontSize) < 16) {
+                            el.style.fontSize = '16px';
+                        }
+                    });
+
+                    // Fix iOS viewport height issues
+                    const updateViewportHeight = () => {
+                        document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+                    };
+                    updateViewportHeight();
+                    window.addEventListener('resize', updateViewportHeight);
+                    window.addEventListener('orientationchange', updateViewportHeight);
+                }
+
+                // Android-specific fixes
+                if (/Android/i.test(navigator.userAgent)) {
+                    // Improve performance on Android devices
+                    document.querySelectorAll('canvas').forEach(canvas => {
+                        canvas.style.transform = 'translateZ(0)'; // Enable hardware acceleration
+                    });
+                }
+
+                // Show mobile help hint initially
+                setTimeout(() => {
+                    showNotification('Tip: Use 2 fingers to pan/zoom, 1 finger to draw!', 'domain');
+                }, 1000);
+            }
+        }
+
+        // Polyfill for older browsers
+        if (!window.navigator.vibrate) {
+            window.navigator.vibrate = () => { }; // No-op fallback
+        }
+
+        // Function to update canvas and axis labels based on selected function
+        function updateLabels() {
+            const fn = functionSelect.value;
+            let inputLabel, outputLabel, inputVar, outputVar, inputRealLabel, inputImagLabel, outputRealLabel, outputImagLabel;
+
+            switch (fn) {
+                case 'z2':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'z² plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = z²';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(z²)';
+                    outputImagLabel = 'Im(z²)';
+                    break;
+                case 'z3':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'z³ plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = z³';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(z³)';
+                    outputImagLabel = 'Im(z³)';
+                    break;
+                case 'z4':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'z⁴ plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = z⁴';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(z⁴)';
+                    outputImagLabel = 'Im(z⁴)';
+                    break;
+                case 'inv':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = '1/z plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = 1/z';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(1/z)';
+                    outputImagLabel = 'Im(1/z)';
+                    break;
+                case 'log':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'log(z) plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = log(z)';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'ln|z|';
+                    outputImagLabel = 'arg(z)';
+                    break;
+                case 'exp':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'eᶻ plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = eᶻ';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'eˣ cos(y)';
+                    outputImagLabel = 'eˣ sin(y)';
+                    break;
+                case 'sin':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'sin(z) plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = sin(z)';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(sin z)';
+                    outputImagLabel = 'Im(sin z)';
+                    break;
+                case 'cos':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'cos(z) plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = cos(z)';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(cos z)';
+                    outputImagLabel = 'Im(cos z)';
+                    break;
+                case 'sqrt':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = '√z plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = √z';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(√z)';
+                    outputImagLabel = 'Im(√z)';
+                    break;
+                case 'zbar':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'z̄ plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = z̄';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(z̄)';
+                    outputImagLabel = 'Im(z̄)';
+                    break;
+                case 'mobius':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = '(z-1)/(z+1) plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = (z-1)/(z+1)';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(w)';
+                    outputImagLabel = 'Im(w)';
+                    break;
+                case 'quadratic':
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'z²+z plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = z²+z';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(z²+z)';
+                    outputImagLabel = 'Im(z²+z)';
+                    break;
+                case 'real_poly':
+                    inputLabel = 'Input plane (x,y)';
+                    outputLabel = 'Output plane (u,v)';
+                    inputVar = 'z = x + iy';
+                    outputVar = 'u = x²-y², v = 0';
+                    inputRealLabel = 'x';
+                    inputImagLabel = 'y';
+                    outputRealLabel = 'u';
+                    outputImagLabel = 'v';
+                    break;
+                default:
+                    inputLabel = 'z plane (input)';
+                    outputLabel = 'w plane (output)';
+                    inputVar = 'z';
+                    outputVar = 'w = f(z)';
+                    inputRealLabel = 'Re(z)';
+                    inputImagLabel = 'Im(z)';
+                    outputRealLabel = 'Re(w)';
+                    outputImagLabel = 'Im(w)';
+            }
+
+            // Update canvas labels
+            domainLabel.textContent = inputLabel;
+            codomainLabel.textContent = outputLabel;
+
+            // Store labels for use in grid drawing
+            window.currentLabels = {
+                inputRealLabel,
+                inputImagLabel,
+                outputRealLabel,
+                outputImagLabel
+            };
+        }
 
         function toggleTheme() {
             isDarkMode = !isDarkMode;
@@ -567,6 +1010,22 @@
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
         const MAX_STROKES = 6, strokes = [], dots = [], texts = [], images = [];
+
+        // Snap to grid state
+        let snapToGrid = false;
+
+        // Touch gesture state
+        let isTouching = false;
+        let touchStartDistance = 0;
+        let touchStartCenter = { x: 0, y: 0 };
+        let lastTouchPositions = [];
+        let touchGestureMode = 'none'; // 'none', 'pan', 'zoom', 'draw'
+        let touchStartTime = 0;
+        let initialPinchScale = 1;
+        let lastPanPosition = null;
+        let gestureDetectionDelay = 50; // ms to wait before deciding gesture type
+        let gestureStartTime = 0;
+        let hasMovedEnough = false;
 
         // Chessboard state
         let chessboard = null;
@@ -678,6 +1137,10 @@
                     const z2 = { re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im };
                     return { re: z2.re + z.re, im: z2.im + z.im };
                 };
+                case 'real_poly': return z => {
+                    // Real polynomial: f(x,y) = (x²-y², 0)
+                    return { re: z.re * z.re - z.im * z.im, im: 0 };
+                };
                 default: return z => ({ re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im });
             }
         }
@@ -723,6 +1186,11 @@
                     return { re: (num.re * den.re + num.im * den.im) / denom, im: (num.im * den.re - num.re * den.im) / denom };
                 };
                 case 'sqrt': return w => ({ re: w.re * w.re - w.im * w.im, im: 2 * w.re * w.im });
+                case 'real_poly': return w => {
+                    // Inverse of x²-y² = u, need to solve for x,y
+                    // This is complex, so we'll use a simple approximation
+                    return { re: Math.sqrt(Math.abs(w.re)), im: 0 };
+                };
                 default: return w => {
                     const [r1, r2] = sqrtBranches(w);
                     return continuousToggle.checked ? chooseRoot(w) : r1;
@@ -737,14 +1205,48 @@
         function toComplex(x, y, key) { return { re: (x - origin[key].x) / scale, im: (origin[key].y - y) / scale }; }
         function toCanvas(z, key) { return { x: origin[key].x + z.re * scale, y: origin[key].y - z.im * scale }; }
 
+        // Snap to grid function
+        function snapToGridPoint(x, y, key) {
+            if (!snapToGrid) return { x, y };
+
+            // Convert to complex coordinates
+            const z = toComplex(x, y, key);
+
+            // Snap to nearest integer
+            const snappedZ = {
+                re: Math.round(z.re),
+                im: Math.round(z.im)
+            };
+
+            // Convert back to canvas coordinates
+            return toCanvas(snappedZ, key);
+        }
+
         function resize() {
             // adjust scale based on zoom slider
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
-            scale = baseScale * zoomVal;
-            canvases.domain.width = window.innerWidth / 2;
-            canvases.domain.height = window.innerHeight;
-            canvases.codomain.width = window.innerWidth / 2;
-            canvases.codomain.height = window.innerHeight;
+            scale = baseScale * zoomVal;            // Responsive canvas sizing
+            const isMobile = window.innerWidth <= 768;
+            const isLandscape = window.innerWidth > window.innerHeight;
+
+            // Account for menu bar height
+            const menuBarHeight = isMobile ? (window.innerWidth <= 480 ? 32 : 36) : 40;
+            const availableHeight = window.innerHeight - menuBarHeight;
+
+            if (isMobile && !isLandscape) {
+                // Portrait mobile - stack vertically
+                canvases.domain.width = window.innerWidth;
+                canvases.domain.height = availableHeight / 2;
+                canvases.codomain.width = window.innerWidth;
+                canvases.codomain.height = availableHeight / 2;
+            } else {
+                // Desktop or landscape mobile - side by side
+                canvases.domain.width = window.innerWidth / 2;
+                canvases.domain.height = availableHeight;
+                canvases.codomain.width = window.innerWidth / 2;
+                canvases.codomain.height = availableHeight;
+            }
+
             origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
             origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
 
@@ -775,6 +1277,30 @@
             ];
         }
         window.addEventListener('resize', resize);
+
+        // Handle orientation changes on mobile
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                resize();
+                updateAllTransformations();
+            }, 100);
+        });
+
+        // Prevent page refresh on pull-down gesture (iOS Safari)
+        document.addEventListener('touchmove', (e) => {
+            if (e.scale !== 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // Handle device orientation for better mobile experience
+        if (window.DeviceOrientationEvent) {
+            // This helps with mobile browser quirks
+            window.addEventListener('deviceorientation', () => {
+                // Small delay to handle orientation-based layout changes
+                setTimeout(resize, 200);
+            });
+        }
         // zoom slider listener
         const zoomSlider = document.getElementById('zoomSlider');
         zoomSlider.addEventListener('input', () => {
@@ -785,6 +1311,9 @@
 
         // Update transformations when function changes
         functionSelect.addEventListener('change', () => {
+            // Update labels first
+            updateLabels();
+
             // Update all stroke transformations (lines, circles, stars, spirals, etc.)
             updateStrokeTransformations();
 
@@ -889,10 +1418,15 @@
             }
 
             // Get appropriate labels based on function
-            const fn = functionSelect.value;
-            const isComplex = ['z2', 'z3', 'z4', 'inv', 'log', 'exp', 'sin', 'cos', 'sqrt', 'mobius', 'quadratic'].includes(fn);
-            const realLabel = isComplex ? (key === 'domain' ? 'Re(z)' : 'Re(w)') : 'x';
-            const imagLabel = isComplex ? (key === 'domain' ? 'Im(z)' : 'Im(w)') : 'y';
+            const labels = window.currentLabels || {
+                inputRealLabel: 'Re(z)',
+                inputImagLabel: 'Im(z)',
+                outputRealLabel: 'Re(w)',
+                outputImagLabel: 'Im(w)'
+            };
+
+            const realLabel = key === 'domain' ? labels.inputRealLabel : labels.outputRealLabel;
+            const imagLabel = key === 'domain' ? labels.inputImagLabel : labels.outputImagLabel;
 
             // Add axis labels with scaled numbers
             g.fillStyle = textColor;
@@ -940,7 +1474,27 @@
 
                 if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
-                    const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
+
+                    // Determine if we should show 'i' suffix based on the current function and plane
+                    const shouldShowI = imagLabel.includes('Im(') || imagLabel.includes('i');
+                    let label;
+
+                    if (shouldShowI) {
+                        // For complex functions, show 'i' suffix
+                        if (mathValue === 1) {
+                            label = 'i';
+                        } else if (mathValue === -1) {
+                            label = '-i';
+                        } else if (mathValue === 0) {
+                            label = '0';
+                        } else {
+                            label = `${displayValue}i`;
+                        }
+                    } else {
+                        // For real functions or when showing plain values
+                        label = displayValue;
+                    }
+
                     g.fillText(label, originX + 15, y);
                 }
             }
@@ -954,7 +1508,27 @@
 
                 if (y >= 20 && y <= c.height - 20 && Math.abs(mathValue) <= 20 * unitScale) {
                     const displayValue = unitScale < 1 ? mathValue.toFixed(1) : mathValue.toString();
-                    const label = isComplex ? (mathValue > 0 ? `${displayValue}i` : `${displayValue}i`) : displayValue;
+
+                    // Determine if we should show 'i' suffix based on the current function and plane
+                    const shouldShowI = imagLabel.includes('Im(') || imagLabel.includes('i');
+                    let label;
+
+                    if (shouldShowI) {
+                        // For complex functions, show 'i' suffix
+                        if (mathValue === 1) {
+                            label = 'i';
+                        } else if (mathValue === -1) {
+                            label = '-i';
+                        } else if (mathValue === 0) {
+                            label = '0';
+                        } else {
+                            label = `${displayValue}i`;
+                        }
+                    } else {
+                        // For real functions or when showing plain values
+                        label = displayValue;
+                    }
+
                     g.fillText(label, originX + 15, y);
                 }
             }
@@ -1022,7 +1596,27 @@
                     g.arc(p.x, p.y, 5, 0, 2 * Math.PI);
                     g.fill();
                     g.fillStyle = isDarkMode ? '#ffffff' : '#000000';
-                    g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`, p.x + 6, p.y - 6);
+
+                    // Use correct notation for dot labels
+                    const labels = window.currentLabels || {
+                        inputRealLabel: 'Re(z)', inputImagLabel: 'Im(z)',
+                        outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)'
+                    };
+
+                    let labelText;
+                    if (idx === 0) {
+                        // Domain (input) dot
+                        const realPart = labels.inputRealLabel.replace(/[()]/g, '');
+                        const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
+                        labelText = `${realPart}=${lab.re.toFixed(2)}, ${imagPart}=${lab.im.toFixed(2)}`;
+                    } else {
+                        // Codomain (output) dot
+                        const realPart = labels.outputRealLabel.replace(/[()]/g, '');
+                        const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
+                        labelText = `${realPart}=${lab.re.toFixed(2)}, ${imagPart}=${lab.im.toFixed(2)}`;
+                    }
+
+                    g.fillText(labelText, p.x + 6, p.y - 6);
                 });
             });
 
@@ -1165,11 +1759,50 @@
         function drawShape(g, pts, mode) { if (!pts || pts.length < 2) return; g.beginPath(); g.moveTo(pts[0].x, pts[0].y); pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); }); if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath(); g.stroke(); }
 
         function computePts(tool, A, B) {
-            const pts = [], dx = B.x - A.x, dy = B.y - A.y; switch (tool) {
-                case 'line': for (let t = 0; t <= 1; t += 0.01) pts.push({ x: A.x + dx * t, y: A.y + dy * t }); break;
-                case 'circle': { const cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2, r = Math.hypot(dx, dy) / 2; for (let a = 0; a < 2 * Math.PI; a += 0.02) pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r }); pts.push(pts[0]); } break;
-                case 'polygon': { const sides = Math.max(3, parseInt(paramInput.value) || 5), ang0 = Math.atan2(dy, dx), rad = Math.hypot(dx, dy), verts = []; for (let i = 0; i < sides; i++) { const ang = ang0 + 2 * Math.PI * i / sides; verts.push({ x: A.x + Math.cos(ang) * rad, y: A.y + Math.sin(ang) * rad }); } verts.push(verts[0]); const sp = 50; for (let k = 0; k < verts.length - 1; k++) { const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y; for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t }); } } break;
-                case 'sine': { const w = Math.hypot(dx, dy), ux = dx / w, uy = dy / w, max = Math.hypot(canvases[activeCanvas].width, canvases[activeCanvas].height); for (let t = 0; t < max; t += 2) { const cx = A.x + ux * t, cy = A.y + uy * t, amp = w / 4, ph = 2 * Math.PI * t / w; pts.push({ x: cx - uy * amp * Math.sin(ph), y: cy + ux * amp * Math.sin(ph) }); } } break;
+            // Apply snap to grid to endpoints if enabled
+            let startPt = A, endPt = B;
+            if (snapToGrid && ['line', 'circle', 'polygon', 'star'].includes(tool)) {
+                startPt = snapToGridPoint(A.x, A.y, activeCanvas);
+                endPt = snapToGridPoint(B.x, B.y, activeCanvas);
+            }
+
+            const pts = [], dx = endPt.x - startPt.x, dy = endPt.y - startPt.y;
+
+            switch (tool) {
+                case 'line':
+                    for (let t = 0; t <= 1; t += 0.01) {
+                        pts.push({ x: startPt.x + dx * t, y: startPt.y + dy * t });
+                    }
+                    break;
+                case 'circle': {
+                    const cx = (startPt.x + endPt.x) / 2, cy = (startPt.y + endPt.y) / 2, r = Math.hypot(dx, dy) / 2;
+                    for (let a = 0; a < 2 * Math.PI; a += 0.02) {
+                        pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+                    }
+                    pts.push(pts[0]);
+                } break;
+                case 'polygon': {
+                    const sides = Math.max(3, parseInt(paramInput.value) || 5), ang0 = Math.atan2(dy, dx), rad = Math.hypot(dx, dy), verts = [];
+                    for (let i = 0; i < sides; i++) {
+                        const ang = ang0 + 2 * Math.PI * i / sides;
+                        verts.push({ x: startPt.x + Math.cos(ang) * rad, y: startPt.y + Math.sin(ang) * rad });
+                    }
+                    verts.push(verts[0]);
+                    const sp = 50;
+                    for (let k = 0; k < verts.length - 1; k++) {
+                        const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y;
+                        for (let t = 0; t <= 1; t += 1 / sp) {
+                            pts.push({ x: P.x + sx * t, y: P.y + sy * t });
+                        }
+                    }
+                } break;
+                case 'sine': {
+                    const w = Math.hypot(dx, dy), ux = dx / w, uy = dy / w, max = Math.hypot(canvases[activeCanvas].width, canvases[activeCanvas].height);
+                    for (let t = 0; t < max; t += 2) {
+                        const cx = startPt.x + ux * t, cy = startPt.y + uy * t, amp = w / 4, ph = 2 * Math.PI * t / w;
+                        pts.push({ x: cx - uy * amp * Math.sin(ph), y: cy + ux * amp * Math.sin(ph) });
+                    }
+                } break;
                 case 'spiral': {
                     const turns = Math.max(1, parseInt(paramInput.value) || 3);
                     const scale = Math.hypot(dx, dy) / 100; // Use distance for scale only
@@ -1179,7 +1812,7 @@
                     for (let th = 0; th <= maxT; th += 0.05) {
                         const r = scale * Math.exp(b * th);
                         // Start spiral at angle 0 and always center at point A
-                        pts.push({ x: A.x + Math.cos(th) * r, y: A.y + Math.sin(th) * r });
+                        pts.push({ x: startPt.x + Math.cos(th) * r, y: startPt.y + Math.sin(th) * r });
                     }
                 } break;
                 case 'star': {
@@ -1193,25 +1826,25 @@
                         for (let i = 0; i < 12; i++) {
                             const angle = a0 + (i * Math.PI / 6);
                             const r = (i % 2 === 0) ? outerRad : innerRad;
-                            verts.push({ x: A.x + Math.cos(angle) * r, y: A.y + Math.sin(angle) * r });
+                            verts.push({ x: startPt.x + Math.cos(angle) * r, y: startPt.y + Math.sin(angle) * r });
                         }
                         verts.push(verts[0]);
                     } else if (n % 2 === 0 && n !== 6) {
                         const h = n / 2, f = [], s = [];
                         for (let i = 0; i < h; i++) {
                             const a = a0 + 2 * Math.PI * i / h;
-                            f.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                            f.push({ x: startPt.x + Math.cos(a) * rad, y: startPt.y + Math.sin(a) * rad });
                         }
                         for (let i = 0; i < h; i++) {
                             const a = a0 + Math.PI / n + 2 * Math.PI * i / h;
-                            s.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                            s.push({ x: startPt.x + Math.cos(a) * rad, y: startPt.y + Math.sin(a) * rad });
                         }
                         verts.push(...f, ...s, f[0]);
                     } else {
                         const skip = Math.floor(n / 2);
                         for (let i = 0; i < n; i++) {
                             const idx = (i * skip) % n, a = a0 + 2 * Math.PI * idx / n;
-                            verts.push({ x: A.x + Math.cos(a) * rad, y: A.y + Math.sin(a) * rad });
+                            verts.push({ x: startPt.x + Math.cos(a) * rad, y: startPt.y + Math.sin(a) * rad });
                         }
                         verts.push(verts[0]);
                     }
@@ -1219,10 +1852,13 @@
                     const sp = 50;
                     for (let k = 0; k < verts.length - 1; k++) {
                         const P = verts[k], Q = verts[k + 1], sx = Q.x - P.x, sy = Q.y - P.y;
-                        for (let t = 0; t <= 1; t += 1 / sp) pts.push({ x: P.x + sx * t, y: P.y + sy * t });
+                        for (let t = 0; t <= 1; t += 1 / sp) {
+                            pts.push({ x: P.x + sx * t, y: P.y + sy * t });
+                        }
                     }
                 } break;
-            } return pts;
+            }
+            return pts;
         }
 
         function startDraw(evt) {
@@ -1230,7 +1866,12 @@
             evt.preventDefault();
 
             if (continuousToggle.checked) prevInv = null;
-            const p = getPos(evt, activeCanvas);
+            let p = getPos(evt, activeCanvas);
+
+            // Apply snap to grid if enabled for drawing operations
+            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star'].includes(toolSelect.value)) {
+                p = snapToGridPoint(p.x, p.y, activeCanvas);
+            }
 
             // Handle text corner dragging
             if (toolSelect.value === 'text') {
@@ -1323,7 +1964,12 @@
                 evt.preventDefault();
             }
 
-            const p = getPos(evt, activeCanvas);
+            let p = getPos(evt, activeCanvas);
+
+            // Apply snap to grid if enabled for drawing operations
+            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star'].includes(toolSelect.value)) {
+                p = snapToGridPoint(p.x, p.y, activeCanvas);
+            }
 
             // Handle text corner dragging with different modes
             if (isDraggingTextCorner && draggedTextIndex !== -1 && draggedTextCornerIndex !== -1) {
@@ -1663,6 +2309,196 @@
             return -1;
         }
 
+        // Touch gesture handling functions
+        function getTouchDistance(touches) {
+            if (touches.length < 2) return 0;
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getTouchCenter(touches) {
+            if (touches.length === 1) {
+                return { x: touches[0].clientX, y: touches[0].clientY };
+            }
+            if (touches.length >= 2) {
+                return {
+                    x: (touches[0].clientX + touches[1].clientX) / 2,
+                    y: (touches[0].clientY + touches[1].clientY) / 2
+                };
+            }
+            return { x: 0, y: 0 };
+        }
+
+        function handleTouchStart(evt) {
+            const touches = evt.touches;
+            touchStartTime = Date.now();
+            gestureStartTime = touchStartTime;
+            hasMovedEnough = false;
+
+            // Add haptic feedback on supported devices
+            if (navigator.vibrate && touches.length === 1) {
+                navigator.vibrate(10);
+            }
+
+            if (touches.length === 1) {
+                // Single touch - could be drawing or start of gesture
+                const touch = touches[0];
+                const canvas = evt.target;
+                activeCanvas = canvas === canvases.domain ? 'domain' : 'codomain';
+
+                touchGestureMode = 'draw';
+                lastPanPosition = { x: touch.clientX, y: touch.clientY };
+
+                // Start drawing if appropriate
+                startDraw(evt);
+
+            } else if (touches.length === 2) {
+                // Two fingers - pan/zoom gesture
+                evt.preventDefault();
+
+                // Haptic feedback for gesture start
+                if (navigator.vibrate) {
+                    navigator.vibrate(15);
+                }
+
+                touchStartDistance = getTouchDistance(touches);
+                touchStartCenter = getTouchCenter(touches);
+                lastPanPosition = touchStartCenter;
+
+                // Get current zoom value for pinch scaling
+                const zoomSlider = document.getElementById('zoomSlider');
+                initialPinchScale = parseFloat(zoomSlider.value) || 1;
+
+                // Start in undetermined mode - will decide based on movement
+                touchGestureMode = 'undetermined';
+
+                // End any current drawing
+                if (isDrawing) {
+                    endDraw(evt);
+                }
+            }
+
+            isTouching = true;
+        }
+
+        function handleTouchMove(evt) {
+            if (!isTouching) return;
+
+            const touches = evt.touches;
+
+            if (touches.length === 1 && touchGestureMode === 'draw') {
+                // Single finger drawing
+                moveDraw(evt);
+
+            } else if (touches.length === 2) {
+                // Two finger gesture - determine type if not already decided
+                evt.preventDefault();
+
+                const currentDistance = getTouchDistance(touches);
+                const currentCenter = getTouchCenter(touches);
+
+                // Calculate changes from start
+                const distanceChange = Math.abs(currentDistance - touchStartDistance);
+                const centerChangeX = Math.abs(currentCenter.x - touchStartCenter.x);
+                const centerChangeY = Math.abs(currentCenter.y - touchStartCenter.y);
+                const totalCenterChange = Math.hypot(centerChangeX, centerChangeY);
+
+                // Check if we've moved enough to determine gesture type
+                if (!hasMovedEnough) {
+                    hasMovedEnough = (distanceChange > 5 || totalCenterChange > 5);
+                }
+
+                // Determine gesture type based on movement patterns
+                if (touchGestureMode === 'undetermined' && hasMovedEnough) {
+                    // Distance change threshold for pinch detection - should be significant
+                    const distanceThreshold = 20;
+                    // Movement threshold for pan detection  
+                    const panThreshold = 15;
+
+                    // Calculate the ratio of distance change to center movement
+                    const distanceRatio = totalCenterChange > 0 ? distanceChange / totalCenterChange : distanceChange;
+
+                    if (distanceChange > distanceThreshold && distanceRatio > 0.8) {
+                        // Clear pinch gesture - distance changing more than center movement
+                        touchGestureMode = 'zoom';
+                        if (navigator.vibrate) navigator.vibrate(10); // Feedback for mode switch
+                    } else if (totalCenterChange > panThreshold && distanceChange < distanceThreshold) {
+                        // Clear pan gesture - center moving more than distance
+                        touchGestureMode = 'pan';
+                        if (navigator.vibrate) navigator.vibrate(10); // Feedback for mode switch
+                    }
+                    // If still unclear, wait for more movement
+                }
+
+                // Execute the gesture once determined
+                if (touchGestureMode === 'zoom' && touchStartDistance > 0) {
+                    // Pure zoom - ignore center movement during zoom
+                    const scale = currentDistance / touchStartDistance;
+                    const zoomSlider = document.getElementById('zoomSlider');
+                    const newZoom = Math.max(0.33, Math.min(3, initialPinchScale * scale));
+                    zoomSlider.value = newZoom;
+
+                    // Trigger zoom change
+                    resize();
+                    updateAllTransformations();
+
+                } else if (touchGestureMode === 'pan' && lastPanPosition) {
+                    // Pure pan - ignore distance changes during pan
+                    const deltaX = currentCenter.x - lastPanPosition.x;
+                    const deltaY = currentCenter.y - lastPanPosition.y;
+
+                    // Only pan if movement is significant enough
+                    if (Math.hypot(deltaX, deltaY) > 2) {
+                        // Apply pan to both canvases directly
+                        origin.domain.x += deltaX;
+                        origin.domain.y += deltaY;
+                        origin.codomain.x += deltaX;
+                        origin.codomain.y += deltaY;
+
+                        updateAllTransformations();
+                        redrawAll();
+
+                        lastPanPosition = currentCenter;
+                    }
+                }
+
+                // Update last position for pan gestures
+                if (touchGestureMode === 'pan') {
+                    lastPanPosition = currentCenter;
+                }
+            }
+        }
+
+        function handleTouchEnd(evt) {
+            const touches = evt.touches;
+
+            if (touches.length === 0) {
+                // All fingers lifted
+                if (touchGestureMode === 'draw') {
+                    endDraw(evt);
+                }
+
+                isTouching = false;
+                touchGestureMode = 'none';
+                lastPanPosition = null;
+                touchStartDistance = 0;
+                hasMovedEnough = false;
+
+            } else if (touches.length === 1 && (touchGestureMode === 'pan' || touchGestureMode === 'zoom' || touchGestureMode === 'undetermined')) {
+                // Went from 2 fingers to 1 - switch to draw mode
+                touchGestureMode = 'draw';
+                lastPanPosition = { x: touches[0].clientX, y: touches[0].clientY };
+                hasMovedEnough = false;
+
+                // Start drawing with remaining finger
+                const touch = touches[0];
+                const canvas = evt.target;
+                activeCanvas = canvas === canvases.domain ? 'domain' : 'codomain';
+                startDraw(evt);
+            }
+        }
+
         // Separate touch and mouse event handling to avoid conflicts
 
         // Mouse events
@@ -1680,42 +2516,31 @@
 
         ['mouseup', 'mouseleave'].forEach(e => window.addEventListener(e, endDraw));
 
-        // Touch events - handle separately with proper preventDefault
+        // Touch events - handle with gesture support
         ['touchstart'].forEach(e => {
-            canvases.domain.addEventListener(e, (evt) => {
-                evt.preventDefault();
-                activeCanvas = 'domain';
-                startDraw(evt);
-            }, { passive: false });
-            canvases.codomain.addEventListener(e, (evt) => {
-                evt.preventDefault();
-                activeCanvas = 'codomain';
-                startDraw(evt);
-            }, { passive: false });
+            canvases.domain.addEventListener(e, handleTouchStart, { passive: false });
+            canvases.codomain.addEventListener(e, handleTouchStart, { passive: false });
         });
 
         ['touchmove'].forEach(e => {
-            canvases.domain.addEventListener(e, (evt) => {
-                evt.preventDefault();
-                moveDraw(evt);
-            }, { passive: false });
-            canvases.codomain.addEventListener(e, (evt) => {
-                evt.preventDefault();
-                moveDraw(evt);
-            }, { passive: false });
+            canvases.domain.addEventListener(e, handleTouchMove, { passive: false });
+            canvases.codomain.addEventListener(e, handleTouchMove, { passive: false });
         });
 
         ['touchend', 'touchcancel'].forEach(e => {
-            window.addEventListener(e, (evt) => {
-                evt.preventDefault();
-                endDraw(evt);
-            }, { passive: false });
+            window.addEventListener(e, handleTouchEnd, { passive: false });
         });
         canvases.domain.addEventListener('mousemove', evt => {
             const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain');
             if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; }
             tooltip.style.display = 'block';
-            tooltip.textContent = `x=${z.re.toFixed(2)}, y=${z.im.toFixed(2)}`;
+
+            // Use current labels for tooltip
+            const labels = window.currentLabels || { inputRealLabel: 'Re(z)', inputImagLabel: 'Im(z)' };
+            const realPart = labels.inputRealLabel.replace(/[()]/g, '');
+            const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
+            tooltip.textContent = `${realPart}=${z.re.toFixed(2)}, ${imagPart}=${z.im.toFixed(2)}`;
+
             tooltip.style.left = evt.clientX + 10 + 'px';
             tooltip.style.top = evt.clientY + 10 + 'px';
 
@@ -1742,7 +2567,13 @@
             const p = getPos(evt, 'codomain'), w = toComplex(p.x, p.y, 'codomain');
             if (w.re == null || w.im == null) { tooltip.style.display = 'none'; return; }
             tooltip.style.display = 'block';
-            tooltip.textContent = `Re=${w.re.toFixed(2)}, Im=${w.im.toFixed(2)}`;
+
+            // Use current labels for tooltip
+            const labels = window.currentLabels || { outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)' };
+            const realPart = labels.outputRealLabel.replace(/[()]/g, '');
+            const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
+            tooltip.textContent = `${realPart}=${w.re.toFixed(2)}, ${imagPart}=${w.im.toFixed(2)}`;
+
             tooltip.style.left = evt.clientX + 10 + 'px';
             tooltip.style.top = evt.clientY + 10 + 'px';
 
@@ -1767,6 +2598,9 @@
         });
         canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
         clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; texts.length = 0; images.length = 0; redrawAll(); });
+        snapToGridToggle.addEventListener('change', (e) => {
+            snapToGrid = e.target.checked;
+        });
 
         // Track modifier keys for different drag modes
         window.addEventListener('keydown', (evt) => {
@@ -1780,6 +2614,12 @@
         });
 
         resize();
+
+        // Initialize mobile features
+        initMobileFeatures();
+
+        // Initialize labels
+        updateLabels();
 
         // Etch-a-Sketch state
         let etchActive = false;
@@ -2701,21 +3541,34 @@
                     handleDirectionalInput(direction);
                 });
 
-                // Touch handling for mobile
+                // Touch handling for mobile with better feedback
                 btn.addEventListener('touchstart', (evt) => {
                     evt.preventDefault();
                     const direction = evt.target.dataset.direction;
+
+                    // Haptic feedback
+                    if (navigator.vibrate) {
+                        navigator.vibrate(10);
+                    }
+
                     handleDirectionalInput(direction);
 
                     // Visual feedback
-                    evt.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                    evt.target.style.background = 'rgba(255, 255, 255, 0.4)';
+                    evt.target.style.transform = 'scale(0.95)';
                 }, { passive: false });
 
                 btn.addEventListener('touchend', (evt) => {
                     evt.preventDefault();
                     // Reset visual feedback
-                    evt.target.style.background = 'rgba(0, 0, 0, 0.7)';
+                    evt.target.style.background = 'rgba(0, 0, 0, 0.9)';
+                    evt.target.style.transform = 'scale(1)';
                 }, { passive: false });
+
+                // Prevent context menu on long press
+                btn.addEventListener('contextmenu', (evt) => {
+                    evt.preventDefault();
+                });
             });
         }
 
