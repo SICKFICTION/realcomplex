@@ -3,10 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
     <title>Complex Function Visualizer</title>
     <style>
         html,
@@ -19,18 +16,10 @@
             background: #111;
             color: #eee;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            overflow-x: hidden; /* Only hide horizontal scrolling */
-            overflow-y: auto; /* Allow vertical scrolling by default */
+            overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
-            /* Prevent zoom on double-tap */
             touch-action: manipulation;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
             user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            -ms-touch-action: manipulation;
         }
 
         /* Light mode styles */
@@ -104,22 +93,19 @@
         #controls {
             width: 100%;
             background: rgba(0, 0, 0, 0.8);
-            padding: 4px 8px;
+            padding: 8px;
             z-index: 10;
             display: flex;
-            gap: 4px;
+            gap: 8px;
             align-items: center;
             justify-content: space-evenly;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
             border-bottom: 1px solid #444;
             position: relative;
-            min-height: 40px;
+            min-height: 50px;
             overflow-x: auto;
-            /* Hide scrollbars but allow scrolling */
             scrollbar-width: none;
-            /* Firefox */
             -ms-overflow-style: none;
-            /* IE/Edge */
         }
 
         #controls::-webkit-scrollbar {
@@ -148,273 +134,48 @@
             flex-shrink: 0;
         }
 
-        /* Mobile responsive adjustments for controls */
-        @media (max-width: 768px) {
-            html {
-                overflow-y: auto;
-                /* Ensure html can scroll vertically */
-                height: 100%;
-                -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-            }
-
-            body {
-                margin: 0;
-                padding: 0;
-                overflow-x: hidden;
-                overflow-y: auto; /* Allow vertical scrolling on mobile */
-                min-height: 100vh; /* Use min-height instead of fixed height */
-                -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-                /* Remove body padding-bottom as it pushes content down */
-            }
-
-            #controls {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                padding: 8px 5px;
-                margin: 0;
-                background: rgba(40, 40, 40, 0.95);
-                backdrop-filter: blur(10px);
-                flex-wrap: wrap;
-                gap: 4px;
-                z-index: 1000;
-                font-size: 12px;
-                max-height: 25vh;
-                overflow-y: auto;
-                justify-content: space-between;
-            }
-
-            #controls label {
-                margin: 0 2px;
-                flex: 0 1 auto;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                font-size: 10px;
-            }
-
-            #controls select,
-            #controls input,
-            #controls button {
-                font-size: 11px;
-                padding: 4px 6px;
-                margin: 2px 0;
-                border-radius: 4px;
-                min-height: 32px;
-                max-width: 80px;
-            }
-
-            #functionSelect,
-            #toolSelect {
-                max-width: 100px;
-            }
-
-            .canvas-container {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                padding: 5px;
-                margin: 0;
-                position: relative;
-                min-height: 0;
-            }
-
-            .canvas-wrapper {
-                flex: 1;
-                position: relative;
-                min-height: 150px;
-            }
-
-            canvas {
-                width: 100% !important;
-                height: 100% !important;
-                border: 1px solid #666;
-                touch-action: none;
-            }
-
-            .canvas-label {
-                font-size: 12px;
-                padding: 3px 8px;
-                background: rgba(0, 0, 0, 0.8);
-                border-radius: 3px;
-                position: absolute;
-                top: 5px;
-                left: 5px;
-                z-index: 10;
-            }
-
-            .zoom-value {
-                font-size: 11px;
-                min-width: 35px;
-                text-align: center;
-            }
-
-            #tooltip {
-                font-size: 11px;
-                padding: 4px 8px;
-                max-width: 200px;
-                word-wrap: break-word;
-            }
-        }
-
-        /* Optimized for modern phones like Galaxy S20 FE (~408px width) */
-        @media (max-width: 430px) and (min-width: 390px) {
-            body {
-                overflow-x: hidden;
-                overflow-y: auto;
-                /* Allow vertical scrolling on mobile */
-            }
-
-            #controls {
-                padding: 3px 5px;
-                gap: 3px;
-                min-height: 38px;
-                font-size: 10px;
-            }
-
-            #controls select,
-            #controls input,
-            #controls button {
-                font-size: 10px;
-                padding: 3px 4px;
-                min-height: 24px;
-            }
-
-            .directional-controls {
-                width: 130px;
-                height: 130px;
-                gap: 8px;
-                bottom: 75px;
-                /* Adjusted to match canvas spacing */
-                right: 12px;
-            }
-
-            .direction-btn {
-                font-size: 26px;
-                min-height: 38px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            body {
-                overflow-x: hidden;
-                overflow-y: auto;
-                /* Allow vertical scrolling on mobile */
-            }
-
-            #controls {
-                font-size: 10px;
-                padding: 2px 4px;
-                gap: 2px;
-                min-height: 32px;
-            }
-
-            #controls select,
-            #controls input,
-            #controls button {
-                font-size: 9px;
-                padding: 1px 2px;
-                min-height: 20px;
-            }
-
-            #controls label {
-                font-size: 9px;
-            }
-
-            .directional-controls {
-                bottom: 30px;
-                /* Back to normal positioning */
-            }
-        }
-
-        /* Desktop-specific styles - hide overflow for full-screen visualization */
-        @media (min-width: 769px) {
-            html,
-            body {
-                overflow: hidden; /* Desktop should not scroll */
-            }
-        }
-
         .main-content {
             display: flex;
             flex: 1;
-            height: calc(100vh - 40px);
+            height: calc(100vh - 60px);
+            min-height: 0;
+            gap: 10px;
+            padding: 5px;
+            box-sizing: border-box;
         }
 
-        @media (max-width: 768px) {
+        @media (orientation: portrait) {
             .main-content {
-                height: auto; /* Allow content to size naturally */
-                min-height: calc(100vh - 25vh);
                 flex-direction: column;
-                position: relative; /* Change from fixed to relative for scrolling */
-                top: 25vh;
-                left: 0;
-                right: 0;
-                margin-bottom: 20px; /* Add some bottom margin for mobile */
             }
-        }
-
-        @media (max-width: 480px) {
-            .main-content {
-                height: auto; /* Allow content to size naturally */
-                min-height: calc(100vh - 25vh);
-                margin-bottom: 30px; /* Extra margin for smaller screens */
-            }
-        }
-
-        /* Landscape mobile orientation */
-        @media (max-width: 768px) and (orientation: landscape) {
-            #controls {
-                max-height: 30vh;
-                padding: 5px;
-            }
-
-            .canvas-container {
-                top: 30vh;
-                bottom: 50px;
-                /* Reduced to give more space to canvases in landscape */
-                flex-direction: row;
-                gap: 8px;
-            }
-
-            .directional-controls {
-                bottom: 60px;
-                /* Adjusted for landscape mode */
-            }
-
-            .canvas-wrapper {
-                flex: 1;
-                min-height: 120px;
-            }
-
+            
             .zoom-slider-container {
-                position: fixed;
-                bottom: 5px;
-                right: 5px;
-                left: auto;
-                transform: none;
-                flex-direction: column;
-                padding: 5px 8px;
-                writing-mode: vertical-lr !important;
-                text-orientation: mixed !important;
-                width: auto !important;
-                height: auto !important;
+                flex-direction: row !important;
+                width: 100% !important;
+                height: 60px !important;
+                min-width: auto !important;
+                max-width: none !important;
+                padding: 10px 20px !important;
             }
-
-            .zoom-slider-container input[type="range"] {
-                width: 80px;
-                -webkit-appearance: slider-vertical !important;
-                appearance: slider-vertical !important;
-                writing-mode: bt-lr !important;
-                height: 80px !important;
+            
+            .zoom-slider {
+                -webkit-appearance: auto !important;
+                appearance: auto !important;
+                width: 200px !important;
+                height: 20px !important;
+                writing-mode: initial !important;
             }
+            
+            .zoom-label,
+            .zoom-value {
+                writing-mode: initial !important;
+                text-orientation: initial !important;
+            }
+        }
 
-            .zoom-slider-container label,
-            .zoom-slider-container .zoom-value {
-                writing-mode: vertical-lr !important;
-                text-orientation: mixed !important;
+        @media (orientation: landscape) {
+            .main-content {
+                flex-direction: row;
             }
         }
 
@@ -439,111 +200,54 @@
 
         .canvas-container {
             position: relative;
-            flex: 1;
             display: flex;
             flex-direction: column;
+            flex: 1;
             min-width: 0;
-            /* Prevent flex overflow */
+            min-height: 0;
         }
 
         /* Zoom Slider Between Canvases */
         .zoom-slider-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 8px;
+            padding: 20px 8px;
             background: rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            flex-direction: column;
-            min-width: 40px;
-            max-width: 60px;
-            writing-mode: vertical-lr;
-            text-orientation: mixed;
+            min-width: 60px;
+            max-width: 80px;
+            border-radius: 8px;
         }
 
         .zoom-slider {
-            writing-mode: bt-lr;
-            /* IE */
             -webkit-appearance: slider-vertical;
-            /* WebKit */
             appearance: slider-vertical;
-            /* Standard */
-            width: 10px;
-            height: 150px;
+            width: 20px;
+            height: 200px;
             background: rgba(255, 255, 255, 0.2);
             outline: none;
             border-radius: 5px;
+            writing-mode: bt-lr;
         }
 
         .zoom-label {
-            font-size: 10px;
+            font-size: 12px;
             color: inherit;
-            writing-mode: vertical-lr;
-            text-orientation: mixed;
             margin: 0;
+            text-align: center;
         }
 
         .zoom-value {
-            font-size: 9px;
+            font-size: 11px;
             color: inherit;
-            writing-mode: vertical-lr;
-            text-orientation: mixed;
-            min-height: 30px;
+            min-height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        /* Mobile responsive adjustments */
-        @media (max-width: 768px) {
-            .zoom-slider-container {
-                flex-direction: row !important;
-                writing-mode: initial !important;
-                text-orientation: initial !important;
-                min-width: auto !important;
-                max-width: none !important;
-                width: 100% !important;
-                height: 50px !important;
-                position: relative !important;
-                bottom: auto !important;
-                left: auto !important;
-                right: auto !important;
-                transform: none !important;
-                background: rgba(0, 0, 0, 0.1) !important;
-                padding: 8px !important;
-                border-radius: 0 !important;
-                backdrop-filter: none !important;
-                z-index: auto !important;
-                box-shadow: none !important;
-            }
-
-            .zoom-slider {
-                -webkit-appearance: auto !important;
-                appearance: auto !important;
-                writing-mode: initial !important;
-                width: 200px !important;
-                height: 10px !important;
-                margin: 0 !important;
-            }
-
-            .zoom-label,
-            .zoom-value {
-                writing-mode: initial !important;
-                text-orientation: initial !important;
-                min-height: auto !important;
-                font-size: 12px !important;
-            }
-
-            .canvas-container {
-                flex: 1;
-                min-height: 0;
-            }
-
-            .canvas-label {
-                font-size: 12px;
-                margin-bottom: 2px;
-            }
+            text-align: center;
         }
 
         .canvas-label {
@@ -558,23 +262,20 @@
             background: #222;
             cursor: crosshair;
             touch-action: none;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            -moz-user-select: none;
-            -ms-user-select: none;
             user-select: none;
-            /* Prevent zoom on double tap */
-            -ms-touch-action: manipulation;
-            -webkit-user-drag: none;
+            border: 2px solid #555;
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+            /* Remove CSS sizing that causes scaling issues */
         }
 
         .domain {
-            border-right: 2px solid #555;
+            border-right: 1px solid #555;
         }
 
         .codomain {
-            border-left: 2px solid #555;
+            border-left: 1px solid #555;
         }
 
         .tooltip {
@@ -602,46 +303,6 @@
             z-index: 15;
         }
 
-        /* Make directional controls more visible on mobile */
-        @media (max-width: 768px) {
-            .directional-controls {
-                width: 120px;
-                height: 120px;
-                gap: 10px;
-                bottom: 70px;
-                /* Reduced to match canvas spacing */
-                right: 10px;
-                background: rgba(0, 0, 0, 0.3);
-                border-radius: 8px;
-                padding: 5px;
-            }
-
-            .direction-btn {
-                font-size: 24px;
-                border-width: 2px;
-                background: rgba(0, 0, 0, 0.9);
-                min-height: 35px;
-                border-radius: 6px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .directional-controls {
-                width: 140px;
-                height: 140px;
-                gap: 12px;
-                bottom: 85px;
-                /* Adjusted for better spacing on small screens */
-                right: 15px;
-            }
-
-            .direction-btn {
-                font-size: 28px;
-                border-width: 3px;
-                min-height: 40px;
-            }
-        }
-
         .direction-btn {
             background: rgba(0, 0, 0, 0.7);
             border: 1px solid #555;
@@ -655,7 +316,6 @@
             user-select: none;
             transition: background-color 0.2s;
             touch-action: manipulation;
-            /* Improve touch responsiveness */
         }
 
         .direction-btn:hover {
@@ -761,17 +421,6 @@
             border: 1px solid #4ecdc4;
         }
 
-        /* Mobile improvements for tooltip */
-        @media (max-width: 768px) {
-            .hover-tooltip {
-                max-width: calc(100vw - 20px);
-                left: 10px;
-                right: 10px;
-                width: auto;
-                font-size: 12px;
-            }
-        }
-
         .help-modal {
             display: none;
             position: fixed;
@@ -782,7 +431,6 @@
             background: rgba(0, 0, 0, 0.9);
             z-index: 1000;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
         }
 
         .help-content {
@@ -794,53 +442,6 @@
             color: #eee;
             line-height: 1.6;
             border: 2px solid #444;
-        }
-
-        /* Mobile help modal improvements */
-        @media (max-width: 768px) {
-            /* Body scrolling is already handled by the main mobile CSS above */
-            
-            .help-modal {
-                /* Ensure modal can scroll properly on mobile */
-                overflow-y: auto;
-                -webkit-overflow-scrolling: touch;
-                /* Handle potential issues with mobile browsers */
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                height: 100vh;
-                /* Use viewport height */
-                width: 100vw;
-                /* Use viewport width */
-            }
-
-            .help-content {
-                margin: 10px;
-                padding: 20px;
-                max-width: none;
-                border-radius: 8px;
-                font-size: 14px;
-                /* Ensure content doesn't get cut off */
-                min-height: calc(100vh - 40px);
-                box-sizing: border-box;
-            }
-
-            .help-content h1 {
-                font-size: 22px;
-                margin-bottom: 15px;
-            }
-
-            .help-content h2 {
-                font-size: 18px;
-                margin-top: 20px;
-            }
-
-            .help-content h3 {
-                font-size: 16px;
-                margin-top: 15px;
-            }
         }
 
         .close-help {
@@ -858,47 +459,6 @@
             cursor: pointer;
             z-index: 1001;
             touch-action: manipulation;
-        }
-
-        /* Mobile device specific improvements */
-        body.mobile-device {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        body.mobile-device .direction-btn {
-            border-width: 2px;
-            font-size: 20px;
-            min-width: 35px;
-            min-height: 35px;
-        }
-
-        body.mobile-device .help-btn,
-        body.mobile-device .export-btn {
-            min-width: 44px;
-            min-height: 44px;
-        }
-
-        body.mobile-device #controls {
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-        }
-
-        /* Prevent text selection on touch devices */
-        .mobile-device * {
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-
-        .mobile-device input,
-        .mobile-device textarea {
-            -webkit-user-select: text;
-            -moz-user-select: text;
-            -ms-user-select: text;
-            user-select: text;
         }
 
         .help-content h1 {
@@ -971,30 +531,6 @@
 </head>
 
 <body>
-    <!-- Mobile Disclaimer Modal -->
-    <div id="mobileDisclaimer"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; color: white; padding: 20px; box-sizing: border-box;">
-        <div style="max-width: 400px; margin: 50px auto; text-align: center;">
-            <h2 style="color: #ff6b6b; margin-bottom: 20px;">📱 Mobile Notice</h2>
-            <p style="font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
-                This Complex Function Visualizer is designed for <strong>desktop computers</strong> with mouse and
-                keyboard for the best experience.
-            </p>
-            <p style="font-size: 14px; line-height: 1.5; margin-bottom: 30px;">
-                On mobile, some features may be limited and the interface condensed, but you can still explore complex
-                functions! Use two fingers to pan/zoom and one finger to draw.
-            </p>
-            <button id="continueAnyway"
-                style="background: #4ecdc4; color: white; border: none; padding: 15px 30px; border-radius: 25px; font-size: 16px; cursor: pointer; margin-right: 10px;">
-                Continue Anyway 📱
-            </button>
-            <button id="goToDesktop"
-                style="background: #ffe66d; color: #333; border: none; padding: 15px 30px; border-radius: 25px; font-size: 16px; cursor: pointer;">
-                Use Desktop Instead 💻
-            </button>
-        </div>
-    </div>
-
     <div id="controls">
         <label>Function:
             <select id="functionSelect">
@@ -1130,86 +666,6 @@
 
         // Theme management
         let isDarkMode = true;
-
-        // Mobile device detection and optimization
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                (window.innerWidth <= 768 && 'ontouchstart' in window);
-        }
-
-        function isIOSDevice() {
-            return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        }
-
-        // Initialize mobile-specific features
-        function initMobileFeatures() {
-            if (isMobileDevice()) {
-                // Show mobile disclaimer
-                showMobileDisclaimer();
-
-                // Add mobile class to body for additional styling
-                document.body.classList.add('mobile-device');
-
-                // Disable double-tap zoom on buttons and controls
-                document.querySelectorAll('button, select, input').forEach(el => {
-                    el.style.touchAction = 'manipulation';
-                });
-
-                // iOS-specific fixes
-                if (isIOSDevice()) {
-                    // Prevent iOS Safari from zooming on input focus
-                    document.querySelectorAll('input, select').forEach(el => {
-                        if (el.style.fontSize === '' || parseInt(el.style.fontSize) < 16) {
-                            el.style.fontSize = '16px';
-                        }
-                    });
-
-                    // Fix iOS viewport height issues
-                    const updateViewportHeight = () => {
-                        document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-                    };
-                    updateViewportHeight();
-                    window.addEventListener('resize', updateViewportHeight);
-                    window.addEventListener('orientationchange', updateViewportHeight);
-                }
-
-                // Android-specific fixes
-                if (/Android/i.test(navigator.userAgent)) {
-                    // Improve performance on Android devices
-                    document.querySelectorAll('canvas').forEach(canvas => {
-                        canvas.style.transform = 'translateZ(0)'; // Enable hardware acceleration
-                    });
-                }
-            }
-        }
-
-        // Mobile disclaimer functionality
-        function showMobileDisclaimer() {
-            const disclaimer = document.getElementById('mobileDisclaimer');
-            disclaimer.style.display = 'block';
-
-            document.getElementById('continueAnyway').onclick = () => {
-                disclaimer.style.display = 'none';
-                // Show mobile help hint after disclaimer
-                setTimeout(() => {
-                    showNotification('Tip: Use 2 fingers to pan/zoom, 1 finger to draw!', 'domain');
-                }, 500);
-            };
-
-            document.getElementById('goToDesktop').onclick = () => {
-                const isConfirmed = confirm('This will redirect you to learn about accessing this tool on a desktop computer.');
-                if (isConfirmed) {
-                    // Could redirect to a help page or show more info
-                    alert('For the best experience, open this page on a desktop or laptop computer with a mouse and keyboard.');
-                    disclaimer.style.display = 'none';
-                }
-            };
-        }
-
-        // Polyfill for older browsers
-        if (!window.navigator.vibrate) {
-            window.navigator.vibrate = () => { }; // No-op fallback
-        }
 
         // Function to update canvas and axis labels based on selected function
         function updateLabels() {
@@ -1393,6 +849,11 @@
 
         // Snap to grid state
         let snapToGrid = false;
+        let hoverSnapTimeout = null;
+        let clickSnapTimeout = null;
+        let lastMousePosition = { x: 0, y: 0 };
+        let isMouseDown = false;
+        let hasDrawnSinceMouseDown = false;
 
         // Touch gesture state
         let isTouching = false;
@@ -1611,21 +1072,101 @@
         function toComplex(x, y, key) { return { re: (x - origin[key].x) / scale, im: (origin[key].y - y) / scale }; }
         function toCanvas(z, key) { return { x: origin[key].x + z.re * scale, y: origin[key].y - z.im * scale }; }
 
-        // Snap to grid function
+        // Snap to grid function - magnetic snap within 3px with hover and click delays
         function snapToGridPoint(x, y, key) {
             if (!snapToGrid) return { x, y };
 
-            // Convert to complex coordinates
-            const z = toComplex(x, y, key);
+            // Get the same unitScale used in grid drawing
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            let unitScale;
 
-            // Snap to nearest integer
-            const snappedZ = {
-                re: Math.round(z.re),
-                im: Math.round(z.im)
-            };
+            if (zoomVal < 0.5) {
+                unitScale = 10;
+            } else if (zoomVal < 1) {
+                unitScale = 5;
+            } else if (zoomVal <= 1.5) {
+                unitScale = 1;
+            } else if (zoomVal <= 2.5) {
+                unitScale = 0.5;
+            } else {
+                unitScale = 0.2;
+            }
 
-            // Convert back to canvas coordinates
-            return toCanvas(snappedZ, key);
+            // Calculate the grid step size in pixels
+            const gridStepPixels = scale * unitScale;
+            
+            // Find the nearest grid lines
+            const originX = origin[key].x;
+            const originY = origin[key].y;
+            
+            // Calculate which grid lines we're near
+            const gridX = Math.round((x - originX) / gridStepPixels) * gridStepPixels + originX;
+            const gridY = Math.round((y - originY) / gridStepPixels) * gridStepPixels + originY;
+            
+            // Check if we're within 3px of any grid intersection
+            const magneticRange = 3;
+            const distanceToIntersection = Math.sqrt(Math.pow(x - gridX, 2) + Math.pow(y - gridY, 2));
+            
+            if (distanceToIntersection <= magneticRange) {
+                return { x: gridX, y: gridY, snapped: true };
+            }
+
+            return { x, y, snapped: false };
+        }
+
+        // Enhanced snap function with hover and click delay detection
+        function checkMagneticSnap(x, y, key, isHover = false, isClick = false) {
+            if (!snapToGrid) return { x, y };
+
+            const snapResult = snapToGridPoint(x, y, key);
+            
+            if (snapResult.snapped) {
+                if (isHover) {
+                    // Clear any existing hover timeout
+                    if (hoverSnapTimeout) {
+                        clearTimeout(hoverSnapTimeout);
+                    }
+                    
+                    // Set new hover timeout for 0.5s
+                    hoverSnapTimeout = setTimeout(() => {
+                        // Force snap on hover after 0.5s
+                        lastMousePosition = { x: snapResult.x, y: snapResult.y };
+                        // Visual feedback could be added here
+                    }, 500);
+                    
+                    return { x, y }; // Don't snap immediately on hover
+                } else if (isClick && !hasDrawnSinceMouseDown) {
+                    // If clicked but haven't drawn yet, start timer
+                    if (clickSnapTimeout) {
+                        clearTimeout(clickSnapTimeout);
+                    }
+                    
+                    clickSnapTimeout = setTimeout(() => {
+                        if (!hasDrawnSinceMouseDown) {
+                            // Force snap if we haven't drawn after 0.5s
+                            lastMousePosition = { x: snapResult.x, y: snapResult.y };
+                            // Could trigger a redraw here if needed
+                        }
+                    }, 500);
+                    
+                    return { x, y }; // Don't snap immediately on click
+                } else {
+                    // Immediate snap for drawing or other actions
+                    return snapResult;
+                }
+            } else {
+                // Clear timeouts if we're not near an intersection
+                if (hoverSnapTimeout) {
+                    clearTimeout(hoverSnapTimeout);
+                    hoverSnapTimeout = null;
+                }
+                if (clickSnapTimeout) {
+                    clearTimeout(clickSnapTimeout);
+                    clickSnapTimeout = null;
+                }
+            }
+
+            return { x, y };
         }
 
         let lastResizeTime = 0;
@@ -1643,18 +1184,37 @@
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             scale = baseScale * zoomVal;
 
-            // Get actual canvas element sizes after CSS layout
-            const domainRect = canvases.domain.getBoundingClientRect();
-            const codomainRect = canvases.codomain.getBoundingClientRect();
-
-            const newDomainWidth = Math.floor(domainRect.width);
-            const newDomainHeight = Math.floor(domainRect.height);
-            const newCodomainWidth = Math.floor(codomainRect.width);
-            const newCodomainHeight = Math.floor(codomainRect.height);
+            // Calculate available space
+            const controlsHeight = 60;
+            const availableHeight = window.innerHeight - controlsHeight;
+            const availableWidth = window.innerWidth;
+            
+            // Determine orientation and calculate canvas size
+            const isPortrait = window.innerHeight > window.innerWidth;
+            let newWidth, newHeight;
+            
+            if (isPortrait) {
+                // Portrait: stack vertically, force square canvases
+                const zoomSliderHeight = 60;
+                const usableHeight = availableHeight - zoomSliderHeight - 40; // padding
+                const canvasSize = Math.min(availableWidth - 20, usableHeight / 2 - 10);
+                const size = Math.max(canvasSize, 200);
+                newWidth = Math.floor(size);
+                newHeight = Math.floor(size);
+            } else {
+                // Landscape: side by side, maximize canvas area without forcing square
+                const zoomSliderWidth = 80;
+                const usableWidth = availableWidth - zoomSliderWidth - 30; // padding
+                const maxWidth = Math.floor((usableWidth / 2) - 10);
+                const maxHeight = Math.floor(availableHeight - 20);
+                
+                // Use maximum available space, not forced square
+                newWidth = Math.max(maxWidth, 200);
+                newHeight = Math.max(maxHeight, 200);
+            }
 
             // Check if size actually changed to avoid unnecessary work
-            // But always allow zoom updates when skipThrottle is true
-            const sizeChanged = newDomainWidth !== lastCanvasSize.width || newDomainHeight !== lastCanvasSize.height;
+            const sizeChanged = newWidth !== lastCanvasSize.width || newHeight !== lastCanvasSize.height;
             if (!sizeChanged && !skipThrottle) {
                 return; // No size change and not a zoom update, so skip
             }
@@ -1665,7 +1225,6 @@
 
                 // Ensure origins are initialized for zoom-only updates
                 if (!origin.domain || !origin.codomain) {
-                    // Initialize origins to canvas centers if not already set
                     origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
                     origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
                 }
@@ -1674,7 +1233,7 @@
                 return;
             }
 
-            lastCanvasSize = { width: newDomainWidth, height: newDomainHeight };
+            lastCanvasSize = { width: newWidth, height: newHeight };
 
             // Preserve current origin offsets before resize
             const oldDomainOrigin = origin.domain ? { ...origin.domain } : null;
@@ -1695,10 +1254,16 @@
             } : { x: 0, y: 0 };
 
             // Apply new canvas dimensions
-            canvases.domain.width = newDomainWidth;
-            canvases.domain.height = newDomainHeight;
-            canvases.codomain.width = newCodomainWidth;
-            canvases.codomain.height = newCodomainHeight;
+            canvases.domain.width = newWidth;
+            canvases.domain.height = newHeight;
+            canvases.codomain.width = newWidth;
+            canvases.codomain.height = newHeight;
+            
+            // Set CSS dimensions to match internal canvas dimensions
+            canvases.domain.style.width = newWidth + 'px';
+            canvases.domain.style.height = newHeight + 'px';
+            canvases.codomain.style.width = newWidth + 'px';
+            canvases.codomain.style.height = newHeight + 'px';
 
             // Set new centers and restore pan offsets
             const newDomainCenter = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
@@ -1740,28 +1305,6 @@
             ];
         }
         window.addEventListener('resize', resize);
-
-        // Handle orientation changes on mobile - but only on actual orientation change, not every device movement
-        let lastOrientation = window.orientation;
-        window.addEventListener('orientationchange', () => {
-            // Only resize if orientation actually changed
-            if (window.orientation !== lastOrientation) {
-                lastOrientation = window.orientation;
-                setTimeout(() => {
-                    resize();
-                    updateAllTransformations();
-                }, 100);
-            }
-        });
-
-        // Prevent page refresh on pull-down gesture (iOS Safari)
-        document.addEventListener('touchmove', (e) => {
-            if (e.scale !== 1) {
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        // Remove problematic deviceorientation listener that was causing frequent resize calls
         // This was triggering resize on every tiny device movement, causing pan to reset
         // zoom slider listener with debounced transformation updates
         const zoomSlider = document.getElementById('zoomSlider');
@@ -2394,12 +1937,16 @@
             // Prevent default to avoid conflicts with touch handling
             evt.preventDefault();
 
+            // Track mouse state for magnetic snap
+            isMouseDown = true;
+            hasDrawnSinceMouseDown = false;
+
             if (continuousToggle.checked) prevInv = null;
             let p = getPos(evt, activeCanvas);
 
-            // Apply snap to grid if enabled for drawing operations
-            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star'].includes(toolSelect.value)) {
-                p = snapToGridPoint(p.x, p.y, activeCanvas);
+            // Apply enhanced magnetic snap for drawing operations
+            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star', 'freehand'].includes(toolSelect.value)) {
+                p = checkMagneticSnap(p.x, p.y, activeCanvas, false, true);
             }
 
             // Handle text corner dragging
@@ -2484,6 +2031,7 @@
             }
 
             isDrawing = true;
+            hasDrawnSinceMouseDown = true; // Mark that we've started drawing
             startPt = p;
             currentPts = [p];
         }
@@ -2495,9 +2043,18 @@
 
             let p = getPos(evt, activeCanvas);
 
-            // Apply snap to grid if enabled for drawing operations
-            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star'].includes(toolSelect.value)) {
-                p = snapToGridPoint(p.x, p.y, activeCanvas);
+            // Track mouse position for hover snap detection
+            lastMousePosition = { x: p.x, y: p.y };
+
+            // Apply enhanced magnetic snap for drawing operations
+            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star', 'freehand'].includes(toolSelect.value)) {
+                if (isDrawing) {
+                    hasDrawnSinceMouseDown = true; // Mark that we're actively drawing
+                    p = checkMagneticSnap(p.x, p.y, activeCanvas, false, false);
+                } else {
+                    // Not drawing, check for hover snap
+                    p = checkMagneticSnap(p.x, p.y, activeCanvas, true, false);
+                }
             }
 
             // Handle text corner dragging with different modes
@@ -2684,6 +2241,20 @@
             }
         }
         function endDraw(evt) {
+            // Reset mouse state
+            isMouseDown = false;
+            hasDrawnSinceMouseDown = false;
+            
+            // Clear any pending snap timeouts
+            if (hoverSnapTimeout) {
+                clearTimeout(hoverSnapTimeout);
+                hoverSnapTimeout = null;
+            }
+            if (clickSnapTimeout) {
+                clearTimeout(clickSnapTimeout);
+                clickSnapTimeout = null;
+            }
+
             // Handle text corner dragging end
             if (isDraggingTextCorner) {
                 isDraggingTextCorner = false;
@@ -3214,9 +2785,6 @@
         });
 
         resize();
-
-        // Initialize mobile features
-        initMobileFeatures();
 
         // Initialize labels
         updateLabels();
