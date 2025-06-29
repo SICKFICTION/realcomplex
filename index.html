@@ -139,14 +139,8 @@
             flex-shrink: 0;
         }
 
-        /* Hide zoom slider on mobile since touch gestures work */
+        /* Mobile responsive adjustments for controls */
         @media (max-width: 768px) {
-
-            #zoomSliderLabel,
-            #zoomSlider {
-                display: none;
-            }
-
             #controls {
                 padding: 3px 6px;
                 gap: 3px;
@@ -274,8 +268,82 @@
             /* Prevent flex overflow */
         }
 
+        /* Zoom Slider Between Canvases */
+        .zoom-slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            flex-direction: column;
+            min-width: 40px;
+            max-width: 60px;
+            writing-mode: vertical-lr;
+            text-orientation: mixed;
+        }
+
+        .zoom-slider {
+            writing-mode: bt-lr;
+            /* IE */
+            -webkit-appearance: slider-vertical;
+            /* WebKit */
+            appearance: slider-vertical;
+            /* Standard */
+            width: 10px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            border-radius: 5px;
+        }
+
+        .zoom-label {
+            font-size: 10px;
+            color: inherit;
+            writing-mode: vertical-lr;
+            text-orientation: mixed;
+            margin: 0;
+        }
+
+        .zoom-value {
+            font-size: 9px;
+            color: inherit;
+            writing-mode: vertical-lr;
+            text-orientation: mixed;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Mobile responsive adjustments */
         @media (max-width: 768px) {
+            .zoom-slider-container {
+                flex-direction: row;
+                writing-mode: initial;
+                text-orientation: initial;
+                min-width: auto;
+                max-width: none;
+                width: 100%;
+                height: 50px;
+            }
+
+            .zoom-slider {
+                -webkit-appearance: auto;
+                appearance: auto;
+                writing-mode: initial;
+                width: 200px;
+                height: 10px;
+            }
+
+            .zoom-label,
+            .zoom-value {
+                writing-mode: initial;
+                text-orientation: initial;
+                min-height: auto;
+            }
+
             .canvas-container {
                 flex: 1;
                 min-height: 0;
@@ -737,9 +805,6 @@
         <button id="clearBtn">Clear</button>
         <label><input type="checkbox" id="continuousToggle" checked /> Continuous</label>
         <label><input type="checkbox" id="snapToGridToggle" /> Snap grid</label>
-        <label id="zoomSliderLabel">Zoom:
-            <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:80px" />
-        </label>
         <button id="themeToggle"
             style="background: #444; color: #eee; border: 1px solid #666; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px;">🌙</button>
     </div>
@@ -761,6 +826,14 @@
                 <div class="direction-btn down" data-direction="down">↓</div>
             </div>
         </div>
+
+        <!-- Zoom Slider Between Canvases -->
+        <div class="zoom-slider-container">
+            <label id="zoomSliderLabel" class="zoom-label">🔍</label>
+            <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" class="zoom-slider" />
+            <span class="zoom-value">1.0x</span>
+        </div>
+
         <div class="canvas-container">
             <div class="canvas-label" id="codomainLabel">Output Plane</div>
             <canvas id="canvasCodomain" class="codomain"></canvas>
@@ -1049,9 +1122,8 @@
         let isTouching = false;
         let touchStartDistance = 0;
         let touchStartCenter = { x: 0, y: 0 };
-        let touchGestureMode = 'none'; // 'none', 'pan', 'zoom', 'draw'
+        let touchGestureMode = 'none'; // 'none', 'pan', 'draw'
         let touchStartTime = 0;
-        let initialPinchScale = 1;
         let lastPanPosition = null;
 
         // Chessboard state
@@ -1249,16 +1321,70 @@
             return toCanvas(snappedZ, key);
         }
 
-        function resize() {
+        let lastResizeTime = 0;
+        let lastCanvasSize = { width: 0, height: 0 };
+
+        function resize(skipThrottle = false) {
+            // Throttle resize calls to prevent excessive resets, but allow immediate zoom updates
+            if (!skipThrottle) {
+                const now = Date.now();
+                if (now - lastResizeTime < 50) return; // Minimum 50ms between resize calls
+                lastResizeTime = now;
+            }
+
             // adjust scale based on zoom slider
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             scale = baseScale * zoomVal;
 
+            // Calculate new dimensions first
+            const isMobile = window.innerWidth <= 768;
+            const isLandscape = window.innerWidth > window.innerHeight;
+            const menuBarHeight = isMobile ? (window.innerWidth <= 480 ? 32 : 36) : 40;
+            const availableHeight = window.innerHeight - menuBarHeight;
+
+            let newDomainWidth, newDomainHeight, newCodomainWidth, newCodomainHeight;
+
+            if (isMobile && !isLandscape) {
+                // Portrait mobile - stack vertically
+                newDomainWidth = newCodomainWidth = window.innerWidth;
+                newDomainHeight = newCodomainHeight = availableHeight / 2;
+            } else {
+                // Desktop or landscape mobile - side by side
+                newDomainWidth = newCodomainWidth = window.innerWidth / 2;
+                newDomainHeight = newCodomainHeight = availableHeight;
+            }
+
+            // Check if size actually changed to avoid unnecessary work
+            // But always allow zoom updates when skipThrottle is true
+            const sizeChanged = newDomainWidth !== lastCanvasSize.width || newDomainHeight !== lastCanvasSize.height;
+            if (!sizeChanged && !skipThrottle) {
+                return; // No size change and not a zoom update, so skip
+            }
+
+            // For zoom-only updates (skipThrottle=true, no size change), just update scale and redraw
+            if (!sizeChanged && skipThrottle) {
+                scale = baseScale * zoomVal;
+
+                // Ensure origins are initialized for zoom-only updates
+                if (!origin.domain || !origin.codomain) {
+                    // Initialize origins to canvas centers if not already set
+                    origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
+                    origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
+                }
+
+                redrawAll();
+                return;
+            }
+
+            lastCanvasSize = { width: newDomainWidth, height: newDomainHeight };
+
             // Preserve current origin offsets before resize
             const oldDomainOrigin = origin.domain ? { ...origin.domain } : null;
             const oldCodomainOrigin = origin.codomain ? { ...origin.codomain } : null;
-            const oldDomainCenter = oldDomainOrigin ? { x: canvases.domain.width / 2, y: canvases.domain.height / 2 } : null;
-            const oldCodomainCenter = oldCodomainOrigin ? { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 } : null;
+            const oldDomainCenter = oldDomainOrigin && canvases.domain.width > 0 ?
+                { x: canvases.domain.width / 2, y: canvases.domain.height / 2 } : null;
+            const oldCodomainCenter = oldCodomainOrigin && canvases.codomain.width > 0 ?
+                { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 } : null;
 
             // Calculate pan offsets before resize
             const domainPanOffset = oldDomainOrigin && oldDomainCenter ? {
@@ -1270,27 +1396,11 @@
                 y: oldCodomainOrigin.y - oldCodomainCenter.y
             } : { x: 0, y: 0 };
 
-            // Responsive canvas sizing
-            const isMobile = window.innerWidth <= 768;
-            const isLandscape = window.innerWidth > window.innerHeight;
-
-            // Account for menu bar height
-            const menuBarHeight = isMobile ? (window.innerWidth <= 480 ? 32 : 36) : 40;
-            const availableHeight = window.innerHeight - menuBarHeight;
-
-            if (isMobile && !isLandscape) {
-                // Portrait mobile - stack vertically
-                canvases.domain.width = window.innerWidth;
-                canvases.domain.height = availableHeight / 2;
-                canvases.codomain.width = window.innerWidth;
-                canvases.codomain.height = availableHeight / 2;
-            } else {
-                // Desktop or landscape mobile - side by side
-                canvases.domain.width = window.innerWidth / 2;
-                canvases.domain.height = availableHeight;
-                canvases.codomain.width = window.innerWidth / 2;
-                canvases.codomain.height = availableHeight;
-            }
+            // Apply new canvas dimensions
+            canvases.domain.width = newDomainWidth;
+            canvases.domain.height = newDomainHeight;
+            canvases.codomain.width = newCodomainWidth;
+            canvases.codomain.height = newCodomainHeight;
 
             // Set new centers and restore pan offsets
             const newDomainCenter = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
@@ -1333,12 +1443,17 @@
         }
         window.addEventListener('resize', resize);
 
-        // Handle orientation changes on mobile
+        // Handle orientation changes on mobile - but only on actual orientation change, not every device movement
+        let lastOrientation = window.orientation;
         window.addEventListener('orientationchange', () => {
-            setTimeout(() => {
-                resize();
-                updateAllTransformations();
-            }, 100);
+            // Only resize if orientation actually changed
+            if (window.orientation !== lastOrientation) {
+                lastOrientation = window.orientation;
+                setTimeout(() => {
+                    resize();
+                    updateAllTransformations();
+                }, 100);
+            }
         });
 
         // Prevent page refresh on pull-down gesture (iOS Safari)
@@ -1348,20 +1463,55 @@
             }
         }, { passive: false });
 
-        // Handle device orientation for better mobile experience
-        if (window.DeviceOrientationEvent) {
-            // This helps with mobile browser quirks
-            window.addEventListener('deviceorientation', () => {
-                // Small delay to handle orientation-based layout changes
-                setTimeout(resize, 200);
-            });
-        }
-        // zoom slider listener
+        // Remove problematic deviceorientation listener that was causing frequent resize calls
+        // This was triggering resize on every tiny device movement, causing pan to reset
+        // zoom slider listener with debounced transformation updates
         const zoomSlider = document.getElementById('zoomSlider');
+        let zoomUpdateTimeout = null;
+        let zoomAnimationFrame = null;
+        let isZooming = false; // Track zoom state for performance optimizations
+
         zoomSlider.addEventListener('input', () => {
-            resize();
-            // Update all transformations when zoom changes - this is crucial for proper visualization
+            isZooming = true; // Mark that we're in zoom mode
+
+            // Direct zoom update without resize logic
+            const zoomVal = parseFloat(zoomSlider.value) || 1;
+            scale = baseScale * zoomVal;
+
+            // Update zoom value display
+            const zoomValueElement = document.querySelector('.zoom-value');
+            if (zoomValueElement) {
+                zoomValueElement.textContent = zoomVal.toFixed(1) + 'x';
+            }
+
+            // Cancel previous animation frame to prevent stacking
+            if (zoomAnimationFrame) {
+                cancelAnimationFrame(zoomAnimationFrame);
+            }
+
+            // Schedule smooth redraw with requestAnimationFrame
+            zoomAnimationFrame = requestAnimationFrame(() => {
+                redrawAll();
+                zoomAnimationFrame = null;
+            });
+
+            // Debounce expensive transformation updates with shorter delay
+            clearTimeout(zoomUpdateTimeout);
+            zoomUpdateTimeout = setTimeout(() => {
+                updateAllTransformations();
+                isZooming = false; // Exit zoom mode after transformations complete
+            }, 50); // Reduced from 100ms to 50ms for more responsive feedback
+        });
+
+        // Immediate update when user releases slider
+        zoomSlider.addEventListener('change', () => {
+            clearTimeout(zoomUpdateTimeout);
+            if (zoomAnimationFrame) {
+                cancelAnimationFrame(zoomAnimationFrame);
+                zoomAnimationFrame = null;
+            }
             updateAllTransformations();
+            isZooming = false; // Exit zoom mode
         });
 
         // Update transformations when function changes
@@ -1637,9 +1787,22 @@
                 const baseColor = `hsla(${s.hue},70%,${isDarkMode ? 60 : 40}%,${alpha})`;
                 ['domain', 'codomain'].forEach(key => {
                     const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key];
+
+                    // Skip drawing if no points
+                    if (!pts || pts.length === 0) return;
+
                     g.strokeStyle = baseColor;
                     g.lineWidth = 2;
-                    drawShape(g, pts, s.mode);
+
+                    // Optimize stroke drawing during zoom operations
+                    if (window.isZooming && pts.length > 20) {
+                        // During zoom, simplify complex strokes by sampling every nth point
+                        const simplifiedPts = pts.filter((_, idx) => idx % 2 === 0);
+                        drawShape(g, simplifiedPts, s.mode);
+                    } else {
+                        // Normal drawing with all points
+                        drawShape(g, pts, s.mode);
+                    }
                 });
             });
 
@@ -2419,10 +2582,6 @@
                 touchStartCenter = getTouchCenter(touches);
                 lastPanPosition = touchStartCenter;
 
-                // Get current zoom value for pinch scaling
-                const zoomSlider = document.getElementById('zoomSlider');
-                initialPinchScale = parseFloat(zoomSlider.value) || 1;
-
                 // Start in undetermined mode - will decide based on movement
                 touchGestureMode = 'undetermined';
 
@@ -2456,37 +2615,20 @@
                 const totalCenterChange = Math.hypot(centerChangeX, centerChangeY);
 
                 // Simplified gesture detection - more reliable for phones
+                // Simplified touch handling - only support panning with 2 fingers
                 if (touchGestureMode === 'undetermined') {
-                    // Much lower thresholds and simpler logic for better phone compatibility
-                    const minMovement = 8; // Lower threshold for initial movement detection
+                    const minMovement = 8; // Threshold for initial movement detection
 
-                    if (distanceChange > minMovement || totalCenterChange > minMovement) {
-                        // Simple rule: if distance changes significantly more than center movement, it's zoom
-                        // Otherwise, it's pan
-                        if (distanceChange > totalCenterChange * 1.2 && distanceChange > 12) {
-                            touchGestureMode = 'zoom';
-                            if (navigator.vibrate) navigator.vibrate(10);
-                        } else {
-                            touchGestureMode = 'pan';
-                            if (navigator.vibrate) navigator.vibrate(10);
-                        }
+                    if (totalCenterChange > minMovement) {
+                        // Only support panning - no zoom
+                        touchGestureMode = 'pan';
+                        if (navigator.vibrate) navigator.vibrate(10);
                     }
                 }
 
-                // Execute the gesture once determined
-                if (touchGestureMode === 'zoom' && touchStartDistance > 0) {
-                    // Pure zoom - ignore center movement during zoom
-                    const scale = currentDistance / touchStartDistance;
-                    const zoomSlider = document.getElementById('zoomSlider');
-                    const newZoom = Math.max(0.33, Math.min(3, initialPinchScale * scale));
-                    zoomSlider.value = newZoom;
-
-                    // Trigger zoom change
-                    resize();
-                    updateAllTransformations();
-
-                } else if (touchGestureMode === 'pan') {
-                    // Pure pan - more responsive for phones
+                // Execute pan gesture
+                if (touchGestureMode === 'pan') {
+                    // Two-finger pan
                     if (lastPanPosition) {
                         const deltaX = currentCenter.x - lastPanPosition.x;
                         const deltaY = currentCenter.y - lastPanPosition.y;
@@ -2499,6 +2641,7 @@
                             origin.codomain.x += deltaX;
                             origin.codomain.y += deltaY;
 
+                            // Update transformations and redraw for real-time feedback
                             updateAllTransformations();
                             redrawAll();
                         }
@@ -2518,12 +2661,13 @@
                     endDraw(evt);
                 }
 
+                // Clean up touch state
                 isTouching = false;
                 touchGestureMode = 'none';
                 lastPanPosition = null;
                 touchStartDistance = 0;
 
-            } else if (touches.length === 1 && (touchGestureMode === 'pan' || touchGestureMode === 'zoom' || touchGestureMode === 'undetermined')) {
+            } else if (touches.length === 1 && (touchGestureMode === 'pan' || touchGestureMode === 'undetermined')) {
                 // Went from 2 fingers to 1 - switch to draw mode
                 touchGestureMode = 'draw';
                 lastPanPosition = { x: touches[0].clientX, y: touches[0].clientY };
@@ -2657,6 +2801,12 @@
 
         // Initialize labels
         updateLabels();
+
+        // Initialize zoom value display
+        const zoomValueElement = document.querySelector('.zoom-value');
+        if (zoomValueElement) {
+            zoomValueElement.textContent = '1.0x';
+        }
 
         // Etch-a-Sketch state
         let etchActive = false;
@@ -3085,32 +3235,78 @@
         function drawTransformedImage(g, img) {
             if (!img.transformedPoints || img.transformedPoints.length === 0) return;
 
-            // Draw transformed image with higher resolution circles (3x resolution with compensation)
+            // Get canvas bounds for culling
+            const canvasWidth = g.canvas.width;
+            const canvasHeight = g.canvas.height;
+
+            // Batch points by color for better performance
+            const pointsByColor = new Map();
+
             img.transformedPoints.forEach(pt => {
                 if (isFinite(pt.x) && isFinite(pt.y)) {
-                    g.fillStyle = pt.color;
-                    // Use the high-resolution size (already adjusted in point generation)
+                    // Cull points outside visible area (with small margin for large points)
+                    const margin = pt.size || 5;
+                    if (pt.x < -margin || pt.x > canvasWidth + margin ||
+                        pt.y < -margin || pt.y > canvasHeight + margin) {
+                        return; // Skip this point
+                    }
+
+                    const color = pt.color;
+                    if (!pointsByColor.has(color)) {
+                        pointsByColor.set(color, []);
+                    }
+                    pointsByColor.get(color).push(pt);
+                }
+            });
+
+            // Draw points batched by color
+            pointsByColor.forEach((points, color) => {
+                g.fillStyle = color;
+                points.forEach(pt => {
                     const size = pt.size || 1;
                     g.beginPath();
                     g.arc(pt.x, pt.y, size, 0, 2 * Math.PI);
                     g.fill();
-                }
+                });
             });
         }
 
         function drawTransformedText(g, text) {
             if (!text.transformedPoints || text.transformedPoints.length === 0) return;
 
-            // Draw transformed text with higher resolution circles (3x resolution with compensation)
+            // Get canvas bounds for culling
+            const canvasWidth = g.canvas.width;
+            const canvasHeight = g.canvas.height;
+
+            // Batch points by color for better performance
+            const pointsByColor = new Map();
+
             text.transformedPoints.forEach(pt => {
                 if (isFinite(pt.x) && isFinite(pt.y)) {
-                    g.fillStyle = pt.color;
-                    // Use the high-resolution size (already adjusted in point generation)
+                    // Cull points outside visible area (with small margin for large points)
+                    const margin = pt.size || 5;
+                    if (pt.x < -margin || pt.x > canvasWidth + margin ||
+                        pt.y < -margin || pt.y > canvasHeight + margin) {
+                        return; // Skip this point
+                    }
+
+                    const color = pt.color;
+                    if (!pointsByColor.has(color)) {
+                        pointsByColor.set(color, []);
+                    }
+                    pointsByColor.get(color).push(pt);
+                }
+            });
+
+            // Draw points batched by color
+            pointsByColor.forEach((points, color) => {
+                g.fillStyle = color;
+                points.forEach(pt => {
                     const size = pt.size || 1;
                     g.beginPath();
                     g.arc(pt.x, pt.y, size, 0, 2 * Math.PI);
                     g.fill();
-                }
+                });
             });
         }
 
@@ -3489,10 +3685,22 @@
                 // Get the four corners of the warped image
                 const [tl, tr, br, bl] = img.corners;
 
+                // Adaptive grid resolution based on zoom level and image size for performance
+                // Lower resolution during zoom operations or for smaller images
+                const imageArea = img.width * img.height;
+                const zoomFactor = scale / baseScale;
+
+                let gridResolution;
+                if (imageArea < 10000 || zoomFactor < 0.5) {
+                    gridResolution = 8; // Low resolution for small images or when zoomed out
+                } else if (zoomFactor > 2) {
+                    gridResolution = 20; // High resolution when zoomed in
+                } else {
+                    gridResolution = 12; // Medium resolution for normal viewing
+                }
+
                 // Draw the image in segments using transforms
                 // Divide the image into a grid and transform each segment
-                const gridResolution = 15; // Number of segments per side for smooth warping
-
                 for (let i = 0; i < gridResolution; i++) {
                     for (let j = 0; j < gridResolution; j++) {
                         const u1 = i / gridResolution;
@@ -3511,6 +3719,16 @@
                         const destTR = bilinearInterpolate(img.corners, u2, v1);
                         const destBR = bilinearInterpolate(img.corners, u2, v2);
                         const destBL = bilinearInterpolate(img.corners, u1, v2);
+
+                        // Early exit if segment is completely outside visible area
+                        const minX = Math.min(destTL.x, destTR.x, destBR.x, destBL.x);
+                        const maxX = Math.max(destTL.x, destTR.x, destBR.x, destBL.x);
+                        const minY = Math.min(destTL.y, destTR.y, destBR.y, destBL.y);
+                        const maxY = Math.max(destTL.y, destTR.y, destBR.y, destBL.y);
+
+                        if (maxX < 0 || minX > g.canvas.width || maxY < 0 || minY > g.canvas.height) {
+                            continue; // Skip segments outside visible area
+                        }
 
                         // Draw this segment as a transformed rectangle approximation
                         g.save();
@@ -4008,6 +4226,10 @@
             const popup = document.getElementById('thankYouPopup');
             popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
         });
+
+        // Final initialization
+        resize();
+        redrawAll();
     </script>
 </body>
 
