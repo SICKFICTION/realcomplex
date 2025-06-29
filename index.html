@@ -167,6 +167,37 @@
             }
         }
 
+        /* Optimized for modern phones like Galaxy S20 FE (~408px width) */
+        @media (max-width: 430px) and (min-width: 390px) {
+            #controls {
+                padding: 3px 5px;
+                gap: 3px;
+                min-height: 38px;
+                font-size: 10px;
+            }
+
+            #controls select,
+            #controls input,
+            #controls button {
+                font-size: 10px;
+                padding: 3px 4px;
+                min-height: 24px;
+            }
+
+            .directional-controls {
+                width: 130px;
+                height: 130px;
+                gap: 8px;
+                bottom: 12px;
+                right: 12px;
+            }
+
+            .direction-btn {
+                font-size: 26px;
+                min-height: 38px;
+            }
+        }
+
         @media (max-width: 480px) {
             #controls {
                 font-size: 10px;
@@ -1018,14 +1049,10 @@
         let isTouching = false;
         let touchStartDistance = 0;
         let touchStartCenter = { x: 0, y: 0 };
-        let lastTouchPositions = [];
         let touchGestureMode = 'none'; // 'none', 'pan', 'zoom', 'draw'
         let touchStartTime = 0;
         let initialPinchScale = 1;
         let lastPanPosition = null;
-        let gestureDetectionDelay = 50; // ms to wait before deciding gesture type
-        let gestureStartTime = 0;
-        let hasMovedEnough = false;
 
         // Chessboard state
         let chessboard = null;
@@ -2333,8 +2360,6 @@
         function handleTouchStart(evt) {
             const touches = evt.touches;
             touchStartTime = Date.now();
-            gestureStartTime = touchStartTime;
-            hasMovedEnough = false;
 
             // Add haptic feedback on supported devices
             if (navigator.vibrate && touches.length === 1) {
@@ -2380,9 +2405,7 @@
             }
 
             isTouching = true;
-        }
-
-        function handleTouchMove(evt) {
+        } function handleTouchMove(evt) {
             if (!isTouching) return;
 
             const touches = evt.touches;
@@ -2400,35 +2423,26 @@
 
                 // Calculate changes from start
                 const distanceChange = Math.abs(currentDistance - touchStartDistance);
-                const centerChangeX = Math.abs(currentCenter.x - touchStartCenter.x);
-                const centerChangeY = Math.abs(currentCenter.y - touchStartCenter.y);
+                const centerChangeX = currentCenter.x - touchStartCenter.x;
+                const centerChangeY = currentCenter.y - touchStartCenter.y;
                 const totalCenterChange = Math.hypot(centerChangeX, centerChangeY);
 
-                // Check if we've moved enough to determine gesture type
-                if (!hasMovedEnough) {
-                    hasMovedEnough = (distanceChange > 5 || totalCenterChange > 5);
-                }
+                // Simplified gesture detection - more reliable for phones
+                if (touchGestureMode === 'undetermined') {
+                    // Much lower thresholds and simpler logic for better phone compatibility
+                    const minMovement = 8; // Lower threshold for initial movement detection
 
-                // Determine gesture type based on movement patterns
-                if (touchGestureMode === 'undetermined' && hasMovedEnough) {
-                    // Distance change threshold for pinch detection - should be significant
-                    const distanceThreshold = 20;
-                    // Movement threshold for pan detection  
-                    const panThreshold = 15;
-
-                    // Calculate the ratio of distance change to center movement
-                    const distanceRatio = totalCenterChange > 0 ? distanceChange / totalCenterChange : distanceChange;
-
-                    if (distanceChange > distanceThreshold && distanceRatio > 0.8) {
-                        // Clear pinch gesture - distance changing more than center movement
-                        touchGestureMode = 'zoom';
-                        if (navigator.vibrate) navigator.vibrate(10); // Feedback for mode switch
-                    } else if (totalCenterChange > panThreshold && distanceChange < distanceThreshold) {
-                        // Clear pan gesture - center moving more than distance
-                        touchGestureMode = 'pan';
-                        if (navigator.vibrate) navigator.vibrate(10); // Feedback for mode switch
+                    if (distanceChange > minMovement || totalCenterChange > minMovement) {
+                        // Simple rule: if distance changes significantly more than center movement, it's zoom
+                        // Otherwise, it's pan
+                        if (distanceChange > totalCenterChange * 1.2 && distanceChange > 12) {
+                            touchGestureMode = 'zoom';
+                            if (navigator.vibrate) navigator.vibrate(10);
+                        } else {
+                            touchGestureMode = 'pan';
+                            if (navigator.vibrate) navigator.vibrate(10);
+                        }
                     }
-                    // If still unclear, wait for more movement
                 }
 
                 // Execute the gesture once determined
@@ -2443,28 +2457,25 @@
                     resize();
                     updateAllTransformations();
 
-                } else if (touchGestureMode === 'pan' && lastPanPosition) {
-                    // Pure pan - ignore distance changes during pan
-                    const deltaX = currentCenter.x - lastPanPosition.x;
-                    const deltaY = currentCenter.y - lastPanPosition.y;
+                } else if (touchGestureMode === 'pan') {
+                    // Pure pan - more responsive for phones
+                    if (lastPanPosition) {
+                        const deltaX = currentCenter.x - lastPanPosition.x;
+                        const deltaY = currentCenter.y - lastPanPosition.y;
 
-                    // Only pan if movement is significant enough
-                    if (Math.hypot(deltaX, deltaY) > 2) {
-                        // Apply pan to both canvases directly
-                        origin.domain.x += deltaX;
-                        origin.domain.y += deltaY;
-                        origin.codomain.x += deltaX;
-                        origin.codomain.y += deltaY;
+                        // Lower threshold for more responsive panning
+                        if (Math.hypot(deltaX, deltaY) > 1) {
+                            // Apply pan to both canvases directly
+                            origin.domain.x += deltaX;
+                            origin.domain.y += deltaY;
+                            origin.codomain.x += deltaX;
+                            origin.codomain.y += deltaY;
 
-                        updateAllTransformations();
-                        redrawAll();
-
-                        lastPanPosition = currentCenter;
+                            updateAllTransformations();
+                            redrawAll();
+                        }
                     }
-                }
-
-                // Update last position for pan gestures
-                if (touchGestureMode === 'pan') {
+                    // Always update position for smoother panning
                     lastPanPosition = currentCenter;
                 }
             }
@@ -2483,13 +2494,11 @@
                 touchGestureMode = 'none';
                 lastPanPosition = null;
                 touchStartDistance = 0;
-                hasMovedEnough = false;
 
             } else if (touches.length === 1 && (touchGestureMode === 'pan' || touchGestureMode === 'zoom' || touchGestureMode === 'undetermined')) {
                 // Went from 2 fingers to 1 - switch to draw mode
                 touchGestureMode = 'draw';
                 lastPanPosition = { x: touches[0].clientX, y: touches[0].clientY };
-                hasMovedEnough = false;
 
                 // Start drawing with remaining finger
                 const touch = touches[0];
