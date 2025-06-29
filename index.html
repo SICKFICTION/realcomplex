@@ -1252,7 +1252,25 @@
         function resize() {
             // adjust scale based on zoom slider
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
-            scale = baseScale * zoomVal;            // Responsive canvas sizing
+            scale = baseScale * zoomVal;
+
+            // Preserve current origin offsets before resize
+            const oldDomainOrigin = origin.domain ? { ...origin.domain } : null;
+            const oldCodomainOrigin = origin.codomain ? { ...origin.codomain } : null;
+            const oldDomainCenter = oldDomainOrigin ? { x: canvases.domain.width / 2, y: canvases.domain.height / 2 } : null;
+            const oldCodomainCenter = oldCodomainOrigin ? { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 } : null;
+
+            // Calculate pan offsets before resize
+            const domainPanOffset = oldDomainOrigin && oldDomainCenter ? {
+                x: oldDomainOrigin.x - oldDomainCenter.x,
+                y: oldDomainOrigin.y - oldDomainCenter.y
+            } : { x: 0, y: 0 };
+            const codomainPanOffset = oldCodomainOrigin && oldCodomainCenter ? {
+                x: oldCodomainOrigin.x - oldCodomainCenter.x,
+                y: oldCodomainOrigin.y - oldCodomainCenter.y
+            } : { x: 0, y: 0 };
+
+            // Responsive canvas sizing
             const isMobile = window.innerWidth <= 768;
             const isLandscape = window.innerWidth > window.innerHeight;
 
@@ -1274,8 +1292,18 @@
                 canvases.codomain.height = availableHeight;
             }
 
-            origin.domain = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
-            origin.codomain = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
+            // Set new centers and restore pan offsets
+            const newDomainCenter = { x: canvases.domain.width / 2, y: canvases.domain.height / 2 };
+            const newCodomainCenter = { x: canvases.codomain.width / 2, y: canvases.codomain.height / 2 };
+
+            origin.domain = {
+                x: newDomainCenter.x + domainPanOffset.x,
+                y: newDomainCenter.y + domainPanOffset.y
+            };
+            origin.codomain = {
+                x: newCodomainCenter.x + codomainPanOffset.x,
+                y: newCodomainCenter.y + codomainPanOffset.y
+            };
 
             // Update chessboard scale if it exists
             if (chessboard && toolSelect.value === 'chessboard') {
