@@ -1301,6 +1301,37 @@
         function chooseRoot(w) { const [r1, r2] = sqrtBranches(w); if (!prevInv) prevInv = r1; const d1 = (r1.re - prevInv.re) ** 2 + (r1.im - prevInv.im) ** 2, d2 = (r2.re - prevInv.re) ** 2 + (r2.im - prevInv.im) ** 2; prevInv = d1 < d2 ? r1 : r2; return prevInv; }
         function invFn(w) { return getInverseFunction()(w); }
 
+        // Helper function to get display coordinates that match the grid labels
+        function getDisplayCoordinates(canvasX, canvasY, key) {
+            // Get the same unitScale used in grid drawing
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            let unitScale;
+
+            if (zoomVal < 0.5) {
+                unitScale = 10;
+            } else if (zoomVal < 1) {
+                unitScale = 5;
+            } else if (zoomVal <= 1.5) {
+                unitScale = 1;
+            } else if (zoomVal <= 2.5) {
+                unitScale = 0.5;
+            } else {
+                unitScale = 0.2;
+            }
+
+            // Calculate grid steps from origin
+            const originX = origin[key].x;
+            const originY = origin[key].y;
+            const gridStepsX = Math.round((canvasX - originX) / scale);
+            const gridStepsY = -Math.round((canvasY - originY) / scale); // Negative because canvas y increases downward
+
+            // Apply unit scaling to match grid labels
+            const displayX = gridStepsX * unitScale;
+            const displayY = gridStepsY * unitScale;
+
+            return { re: displayX, im: displayY };
+        }
+
         function toComplex(x, y, key) { return { re: (x - origin[key].x) / scale, im: (origin[key].y - y) / scale }; }
         function toCanvas(z, key) { return { x: origin[key].x + z.re * scale, y: origin[key].y - z.im * scale }; }
 
@@ -1336,23 +1367,14 @@
             const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
             scale = baseScale * zoomVal;
 
-            // Calculate new dimensions first
-            const isMobile = window.innerWidth <= 768;
-            const isLandscape = window.innerWidth > window.innerHeight;
-            const menuBarHeight = isMobile ? (window.innerWidth <= 480 ? 32 : 36) : 40;
-            const availableHeight = window.innerHeight - menuBarHeight;
-
-            let newDomainWidth, newDomainHeight, newCodomainWidth, newCodomainHeight;
-
-            if (isMobile && !isLandscape) {
-                // Portrait mobile - stack vertically
-                newDomainWidth = newCodomainWidth = window.innerWidth;
-                newDomainHeight = newCodomainHeight = availableHeight / 2;
-            } else {
-                // Desktop or landscape mobile - side by side
-                newDomainWidth = newCodomainWidth = window.innerWidth / 2;
-                newDomainHeight = newCodomainHeight = availableHeight;
-            }
+            // Get actual canvas element sizes after CSS layout
+            const domainRect = canvases.domain.getBoundingClientRect();
+            const codomainRect = canvases.codomain.getBoundingClientRect();
+            
+            const newDomainWidth = Math.floor(domainRect.width);
+            const newDomainHeight = Math.floor(domainRect.height);
+            const newCodomainWidth = Math.floor(codomainRect.width);
+            const newCodomainHeight = Math.floor(codomainRect.height);
 
             // Check if size actually changed to avoid unnecessary work
             // But always allow zoom updates when skipThrottle is true
@@ -1821,17 +1843,49 @@
                         outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)'
                     };
 
+                    // Calculate display coordinates that match grid labels EXACTLY
+                    const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+                    let unitScale;
+                    if (zoomVal < 0.5) {
+                        unitScale = 10;
+                    } else if (zoomVal < 1) {
+                        unitScale = 5;
+                    } else if (zoomVal <= 1.5) {
+                        unitScale = 1;
+                    } else if (zoomVal <= 2.5) {
+                        unitScale = 0.5;
+                    } else {
+                        unitScale = 0.2;
+                    }
+
+                    const originX = origin[key].x;
+                    const originY = origin[key].y;
+                    
+                    // Calculate grid steps EXACTLY like grid labels do
+                    const gridStepsX = Math.round((p.x - originX) / scale);
+                    const gridStepsY = -Math.round((p.y - originY) / scale);
+                    
+                    // Apply unit scaling EXACTLY like grid labels do
+                    const displayX = gridStepsX * unitScale;
+                    const displayY = gridStepsY * unitScale;
+
                     let labelText;
+                    const precision = unitScale < 1 ? 1 : 0;
                     if (idx === 0) {
                         // Domain (input) dot
                         const realPart = labels.inputRealLabel.replace(/[()]/g, '');
                         const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
-                        labelText = `${realPart}=${lab.re.toFixed(2)}, ${imagPart}=${lab.im.toFixed(2)}`;
+                        labelText = `${realPart}=${displayX.toFixed(precision)}, ${imagPart}=${displayY.toFixed(precision)}`;
                     } else {
-                        // Codomain (output) dot
+                        // Codomain (output) dot - use transformed coordinates
                         const realPart = labels.outputRealLabel.replace(/[()]/g, '');
                         const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
-                        labelText = `${realPart}=${lab.re.toFixed(2)}, ${imagPart}=${lab.im.toFixed(2)}`;
+                        // For codomain, calculate display coordinates based on the transformed position
+                        const codomainGridStepsX = Math.round((p.x - origin.codomain.x) / scale);
+                        const codomainGridStepsY = -Math.round((p.y - origin.codomain.y) / scale);
+                        const codomainDisplayX = codomainGridStepsX * unitScale;
+                        const codomainDisplayY = codomainGridStepsY * unitScale;
+                        labelText = `${realPart}=${codomainDisplayX.toFixed(precision)}, ${imagPart}=${codomainDisplayY.toFixed(precision)}`;
                     }
 
                     g.fillText(labelText, p.x + 6, p.y - 6);
@@ -2429,27 +2483,29 @@
             redrawAll();
         }
         function getPos(evt, key) {
-            const r = canvases[key].getBoundingClientRect();
+            const canvas = canvases[key];
             let clientX, clientY;
 
             if (evt.touches && evt.touches.length > 0) {
-                // Touch event - use first touch
                 clientX = evt.touches[0].clientX;
                 clientY = evt.touches[0].clientY;
             } else if (evt.changedTouches && evt.changedTouches.length > 0) {
-                // Touch end event - use first changed touch
                 clientX = evt.changedTouches[0].clientX;
                 clientY = evt.changedTouches[0].clientY;
             } else {
-                // Mouse event
                 clientX = evt.clientX;
                 clientY = evt.clientY;
             }
 
-            return {
-                x: clientX - r.left,
-                y: clientY - r.top
-            };
+            // Get canvas bounding rectangle
+            const rect = canvas.getBoundingClientRect();
+            
+            // Calculate position relative to canvas top-left corner
+            // Use Math.round to ensure pixel-perfect positioning
+            const x = Math.round(clientX - rect.left);
+            const y = Math.round(clientY - rect.top);
+
+            return { x, y };
         }
 
         // Helper function to check if point is near a corner
@@ -2712,15 +2768,40 @@
             window.addEventListener(e, handleTouchEnd, { passive: false });
         });
         canvases.domain.addEventListener('mousemove', evt => {
-            const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain');
-            if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; }
+            const p = getPos(evt, 'domain');
+            
+            // Calculate the precise mathematical coordinate (not snapped to grid)
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            let unitScale;
+            if (zoomVal < 0.5) {
+                unitScale = 10;
+            } else if (zoomVal < 1) {
+                unitScale = 5;
+            } else if (zoomVal <= 1.5) {
+                unitScale = 1;
+            } else if (zoomVal <= 2.5) {
+                unitScale = 0.5;
+            } else {
+                unitScale = 0.2;
+            }
+
+            const originX = origin.domain.x;
+            const originY = origin.domain.y;
+            
+            // Calculate precise coordinates (not rounded to grid)
+            const preciseX = ((p.x - originX) / scale) * unitScale;
+            const preciseY = -((p.y - originY) / scale) * unitScale;
+
+            if (!isFinite(preciseX) || !isFinite(preciseY)) { tooltip.style.display = 'none'; return; }
             tooltip.style.display = 'block';
 
             // Use current labels for tooltip
             const labels = window.currentLabels || { inputRealLabel: 'Re(z)', inputImagLabel: 'Im(z)' };
             const realPart = labels.inputRealLabel.replace(/[()]/g, '');
             const imagPart = labels.inputImagLabel.replace(/[()]/g, '');
-            tooltip.textContent = `${realPart}=${z.re.toFixed(2)}, ${imagPart}=${z.im.toFixed(2)}`;
+            
+            // Show precise coordinates with 3 decimal places
+            tooltip.textContent = `${realPart}=${preciseX.toFixed(3)}, ${imagPart}=${preciseY.toFixed(3)}`;
 
             tooltip.style.left = evt.clientX + 10 + 'px';
             tooltip.style.top = evt.clientY + 10 + 'px';
@@ -2740,20 +2821,48 @@
                 } else if (getImageAt(p.x, p.y, 'domain') !== -1) {
                     cursor = 'move';
                 }
+            } else {
+                // Use simple arrow cursor for precise positioning
+                cursor = 'default';
             }
 
             canvases.domain.style.cursor = cursor;
         });
         canvases.codomain.addEventListener('mousemove', evt => {
-            const p = getPos(evt, 'codomain'), w = toComplex(p.x, p.y, 'codomain');
-            if (w.re == null || w.im == null) { tooltip.style.display = 'none'; return; }
+            const p = getPos(evt, 'codomain');
+            
+            // Calculate the precise mathematical coordinate (not snapped to grid)
+            const zoomVal = parseFloat(document.getElementById('zoomSlider').value) || 1;
+            let unitScale;
+            if (zoomVal < 0.5) {
+                unitScale = 10;
+            } else if (zoomVal < 1) {
+                unitScale = 5;
+            } else if (zoomVal <= 1.5) {
+                unitScale = 1;
+            } else if (zoomVal <= 2.5) {
+                unitScale = 0.5;
+            } else {
+                unitScale = 0.2;
+            }
+
+            const originX = origin.codomain.x;
+            const originY = origin.codomain.y;
+            
+            // Calculate precise coordinates (not rounded to grid)
+            const preciseX = ((p.x - originX) / scale) * unitScale;
+            const preciseY = -((p.y - originY) / scale) * unitScale;
+
+            if (!isFinite(preciseX) || !isFinite(preciseY)) { tooltip.style.display = 'none'; return; }
             tooltip.style.display = 'block';
 
             // Use current labels for tooltip
             const labels = window.currentLabels || { outputRealLabel: 'Re(w)', outputImagLabel: 'Im(w)' };
             const realPart = labels.outputRealLabel.replace(/[()]/g, '');
             const imagPart = labels.outputImagLabel.replace(/[()]/g, '');
-            tooltip.textContent = `${realPart}=${w.re.toFixed(2)}, ${imagPart}=${w.im.toFixed(2)}`;
+            
+            // Show precise coordinates with 3 decimal places
+            tooltip.textContent = `${realPart}=${preciseX.toFixed(3)}, ${imagPart}=${preciseY.toFixed(3)}`;
 
             tooltip.style.left = evt.clientX + 10 + 'px';
             tooltip.style.top = evt.clientY + 10 + 'px';
@@ -2773,6 +2882,9 @@
                 } else if (getImageAt(p.x, p.y, 'codomain') !== -1) {
                     cursor = 'move';
                 }
+            } else {
+                // Use simple arrow cursor for precise positioning
+                cursor = 'default';
             }
 
             canvases.codomain.style.cursor = cursor;
@@ -3899,6 +4011,11 @@
                     const z = dot.label.dom;
                     const w = userFn(z);
                     dot.label.cod = w;
+                    
+                    // Update canvas positions for the dot based on its mathematical coordinates
+                    const domainPos = toCanvas(z, 'domain');
+                    dot.x = domainPos.x;
+                    dot.y = domainPos.y;
                 }
             });
         }
