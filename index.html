@@ -15,6 +15,67 @@
             color: #eee;
             font-family: sans-serif;
             overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Light mode styles */
+        body.light-mode {
+            background: #f5f5f5;
+            color: #222;
+        }
+
+        body.light-mode canvas {
+            background: #ffffff !important;
+        }
+
+        body.light-mode .domain {
+            border-right: 2px solid #ccc;
+        }
+
+        body.light-mode .codomain {
+            border-left: 2px solid #ccc;
+        }
+
+        body.light-mode #controls {
+            background: rgba(255, 255, 255, 0.9);
+            color: #222;
+            border: 1px solid #ccc;
+        }
+
+        body.light-mode .canvas-label {
+            color: #555;
+        }
+
+        body.light-mode .help-btn {
+            background: rgba(200, 50, 50, 0.9);
+        }
+
+        body.light-mode .export-btn {
+            background: rgba(50, 150, 50, 0.9);
+        }
+
+        body.light-mode .direction-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #333;
+            color: #333;
+        }
+
+        body.light-mode .direction-btn:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+
+        body.light-mode .hover-tooltip {
+            background: rgba(255, 255, 255, 0.95);
+            color: #2c5282;
+            border: 1px solid #2c5282;
+        }
+
+        #themeToggle {
+            transition: all 0.3s;
+        }
+
+        #themeToggle:hover {
+            transform: scale(1.1);
         }
 
         #controls {
@@ -31,10 +92,43 @@
             align-items: center;
         }
 
+        /* Mobile improvements for controls */
+        @media (max-width: 768px) {
+            #controls {
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                transform: none;
+                flex-wrap: wrap;
+                font-size: 12px;
+                padding: 8px;
+                gap: 5px;
+            }
+
+            #controls select,
+            #controls input {
+                font-size: 12px;
+                padding: 1px 2px;
+            }
+        }
+
         #controls input,
         #controls select {
             color: #000;
             padding: 2px 4px;
+            transition: all 0.3s;
+        }
+
+        body.light-mode #controls input,
+        body.light-mode #controls select {
+            background: #fff;
+            border: 1px solid #ccc;
+        }
+
+        body.light-mode #controls button {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
         }
 
         .canvas-container {
@@ -56,6 +150,11 @@
             background: #222;
             cursor: crosshair;
             touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
 
         .domain {
@@ -91,6 +190,38 @@
             z-index: 15;
         }
 
+        /* Make directional controls more visible on mobile */
+        @media (max-width: 768px) {
+            .directional-controls {
+                width: 100px;
+                height: 100px;
+                gap: 8px;
+                bottom: 80px;
+                right: 15px;
+            }
+
+            .direction-btn {
+                font-size: 20px;
+                border-width: 2px;
+                background: rgba(0, 0, 0, 0.9);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .directional-controls {
+                width: 120px;
+                height: 120px;
+                gap: 10px;
+                bottom: 90px;
+                right: 10px;
+            }
+
+            .direction-btn {
+                font-size: 24px;
+                border-width: 3px;
+            }
+        }
+
         .direction-btn {
             background: rgba(0, 0, 0, 0.7);
             border: 1px solid #555;
@@ -103,6 +234,8 @@
             justify-content: center;
             user-select: none;
             transition: background-color 0.2s;
+            touch-action: manipulation;
+            /* Improve touch responsiveness */
         }
 
         .direction-btn:hover {
@@ -150,6 +283,28 @@
             transition: all 0.3s;
         }
 
+        .export-btn {
+            position: fixed;
+            bottom: 10px;
+            left: 45px;
+            width: 25px;
+            height: 25px;
+            background: rgba(50, 150, 50, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 20;
+            transition: all 0.3s;
+        }
+
+        .export-btn:hover {
+            background: rgba(50, 150, 50, 1);
+            transform: scale(1.1);
+        }
+
         .help-btn:hover {
             background: rgba(220, 70, 70, 1);
             transform: scale(1.1);
@@ -169,6 +324,17 @@
             display: none;
             z-index: 25;
             border: 1px solid #4ecdc4;
+        }
+
+        /* Mobile improvements for tooltip */
+        @media (max-width: 768px) {
+            .hover-tooltip {
+                max-width: calc(100vw - 20px);
+                left: 10px;
+                right: 10px;
+                width: auto;
+                font-size: 12px;
+            }
         }
 
         .help-modal {
@@ -324,12 +490,15 @@
         <label>Zoom:
             <input type="range" id="zoomSlider" min="0.33" max="3" step="0.1" value="1" style="width:100px" />
         </label>
+        <button id="themeToggle"
+            style="background: #444; color: #eee; border: 1px solid #666; padding: 5px 10px; border-radius: 4px; cursor: pointer;">🌙</button>
     </div>
-    
+
     <!-- Single Help Button -->
     <button class="help-btn" id="helpBtn">?</button>
+    <button class="export-btn" id="exportBtn">⬇</button>
     <div id="hoverTooltip" class="hover-tooltip"></div>
-    
+
     <div id="tooltip" class="tooltip" style="display:none;"></div>
     <div class="canvas-container">
         <div class="canvas-label">z plane</div>
@@ -374,6 +543,26 @@
         const clearBtn = document.getElementById('clearBtn');
         const continuousToggle = document.getElementById('continuousToggle');
         const tooltip = document.getElementById('tooltip');
+        const themeToggle = document.getElementById('themeToggle');
+
+        // Theme management
+        let isDarkMode = true;
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode', !isDarkMode);
+            themeToggle.textContent = isDarkMode ? '🌙' : '☀️';
+            themeToggle.style.background = isDarkMode ? '#444' : '#f0f0f0';
+            themeToggle.style.color = isDarkMode ? '#eee' : '#333';
+
+            // Update canvas backgrounds programmatically
+            setTimeout(() => {
+                redrawAll();
+            }, 100);
+        }
+
+        // Initialize theme toggle
+        themeToggle.addEventListener('click', toggleTheme);
 
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
@@ -623,6 +812,11 @@
             const c = canvases[key], g = ctx[key];
             g.clearRect(0, 0, c.width, c.height);
 
+            // Set colors based on theme
+            const gridColor = isDarkMode ? '#444' : '#ddd';
+            const axisColor = isDarkMode ? '#888' : '#666';
+            const textColor = isDarkMode ? '#ffffff' : '#000000';
+
             // Calculate offset to align background grid with axes
             const originX = origin[key].x;
             const originY = origin[key].y;
@@ -630,7 +824,7 @@
             const offsetY = originY % scale;
 
             // Draw background grid aligned with axes
-            g.strokeStyle = '#444';
+            g.strokeStyle = gridColor;
             g.lineWidth = 1;
 
             // Vertical lines
@@ -662,7 +856,7 @@
             }
 
             // Draw main axes at true origin positions
-            g.strokeStyle = '#888';
+            g.strokeStyle = axisColor;
             g.lineWidth = 2;
             g.beginPath();
             g.moveTo(originX, 0);
@@ -701,7 +895,7 @@
             const imagLabel = isComplex ? (key === 'domain' ? 'Im(z)' : 'Im(w)') : 'y';
 
             // Add axis labels with scaled numbers
-            g.fillStyle = '#ffffff';
+            g.fillStyle = textColor;
             g.font = '12px Arial';
             g.textAlign = 'center';
             g.textBaseline = 'top';
@@ -767,7 +961,7 @@
 
             // Draw axis labels
             g.font = 'bold 14px Arial';
-            g.fillStyle = '#ffffff';
+            g.fillStyle = textColor;
             g.textAlign = 'right';
             g.textBaseline = 'bottom';
             g.fillText(realLabel, c.width - 10, originY - 10);
@@ -810,10 +1004,11 @@
             }
 
             strokes.forEach((s, i) => {
-                const alpha = i < strokes.length - MAX_STROKES ? 0.2 : 1, color = `hsla(${s.hue},70%,60%,${alpha})`;
+                const alpha = i < strokes.length - MAX_STROKES ? 0.2 : 1;
+                const baseColor = `hsla(${s.hue},70%,${isDarkMode ? 60 : 40}%,${alpha})`;
                 ['domain', 'codomain'].forEach(key => {
                     const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key];
-                    g.strokeStyle = color;
+                    g.strokeStyle = baseColor;
                     g.lineWidth = 2;
                     drawShape(g, pts, s.mode);
                 });
@@ -822,10 +1017,11 @@
             dots.forEach(d => {
                 ['domain', 'codomain'].forEach((key, idx) => {
                     const g = ctx[key], lab = (idx === 0 ? d.label.dom : invFn(d.label.dom)), p = (idx === 0 ? { x: d.x, y: d.y } : toCanvas(lab, key));
-                    g.fillStyle = 'yellow';
+                    g.fillStyle = isDarkMode ? 'yellow' : '#ff6600';
                     g.beginPath();
                     g.arc(p.x, p.y, 5, 0, 2 * Math.PI);
                     g.fill();
+                    g.fillStyle = isDarkMode ? '#ffffff' : '#000000';
                     g.fillText(`(${lab.re.toFixed(2)},${lab.im.toFixed(2)}i)`, p.x + 6, p.y - 6);
                 });
             });
@@ -860,7 +1056,9 @@
                         if (isRectangular && !hasTransformation) {
                             // Draw original text normally only if not warped AND not transformed on other canvas
                             g.font = `${t.fontSize}px ${t.fontFamily}`;
-                            g.fillStyle = t.color || '#fff';
+                            // Use appropriate color based on theme if text color is default
+                            const textColor = t.color === '#ffffff' ? (isDarkMode ? '#ffffff' : '#000000') : t.color;
+                            g.fillStyle = textColor;
                             g.textAlign = 'center';
                             g.textBaseline = 'middle';
                             g.fillText(t.text, t.x, t.y);
@@ -1028,7 +1226,9 @@
         }
 
         function startDraw(evt) {
+            // Prevent default to avoid conflicts with touch handling
             evt.preventDefault();
+
             if (continuousToggle.checked) prevInv = null;
             const p = getPos(evt, activeCanvas);
 
@@ -1118,6 +1318,11 @@
             currentPts = [p];
         }
         function moveDraw(evt) {
+            // Prevent default to avoid conflicts with touch handling  
+            if (evt.type.startsWith('touch')) {
+                evt.preventDefault();
+            }
+
             const p = getPos(evt, activeCanvas);
 
             // Handle text corner dragging with different modes
@@ -1286,7 +1491,7 @@
                 redrawAll();
                 ['domain', 'codomain'].forEach(key => {
                     const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key));
-                    ctx[key].strokeStyle = '#fff';
+                    ctx[key].strokeStyle = isDarkMode ? '#fff' : '#000';
                     ctx[key].lineWidth = 2;
                     drawShape(ctx[key], pts, 'freehand');
                 });
@@ -1297,7 +1502,7 @@
                 redrawAll();
                 ['domain', 'codomain'].forEach(key => {
                     const pts2 = key === activeCanvas ? pts : img;
-                    ctx[key].strokeStyle = '#fff';
+                    ctx[key].strokeStyle = isDarkMode ? '#fff' : '#000';
                     ctx[key].lineWidth = 2;
                     drawShape(ctx[key], pts2, tool);
                 });
@@ -1359,7 +1564,29 @@
             if (strokes.length > MAX_STROKES) strokes.shift();
             redrawAll();
         }
-        function getPos(evt, key) { const r = canvases[key].getBoundingClientRect(), t = evt.touches ? evt.touches[0] : null; return { x: (t ? t.clientX : evt.clientX) - r.left, y: (t ? t.clientY : evt.clientY) - r.top }; }
+        function getPos(evt, key) {
+            const r = canvases[key].getBoundingClientRect();
+            let clientX, clientY;
+
+            if (evt.touches && evt.touches.length > 0) {
+                // Touch event - use first touch
+                clientX = evt.touches[0].clientX;
+                clientY = evt.touches[0].clientY;
+            } else if (evt.changedTouches && evt.changedTouches.length > 0) {
+                // Touch end event - use first changed touch
+                clientX = evt.changedTouches[0].clientX;
+                clientY = evt.changedTouches[0].clientY;
+            } else {
+                // Mouse event
+                clientX = evt.clientX;
+                clientY = evt.clientY;
+            }
+
+            return {
+                x: clientX - r.left,
+                y: clientY - r.top
+            };
+        }
 
         // Helper function to check if point is near a corner
         function isNearCorner(point, corner, threshold = 10) {
@@ -1436,9 +1663,54 @@
             return -1;
         }
 
-        ['mousedown', 'touchstart'].forEach(e => { canvases.domain.addEventListener(e, () => activeCanvas = 'domain'); canvases.codomain.addEventListener(e, () => activeCanvas = 'codomain'); canvases.domain.addEventListener(e, startDraw); canvases.codomain.addEventListener(e, startDraw); });
-        ['mousemove', 'touchmove'].forEach(e => { canvases.domain.addEventListener(e, moveDraw); canvases.codomain.addEventListener(e, moveDraw); });
-        ['mouseup', 'touchend', 'mouseleave', 'touchcancel'].forEach(e => window.addEventListener(e, endDraw));
+        // Separate touch and mouse event handling to avoid conflicts
+
+        // Mouse events
+        ['mousedown'].forEach(e => {
+            canvases.domain.addEventListener(e, () => activeCanvas = 'domain');
+            canvases.codomain.addEventListener(e, () => activeCanvas = 'codomain');
+            canvases.domain.addEventListener(e, startDraw);
+            canvases.codomain.addEventListener(e, startDraw);
+        });
+
+        ['mousemove'].forEach(e => {
+            canvases.domain.addEventListener(e, moveDraw);
+            canvases.codomain.addEventListener(e, moveDraw);
+        });
+
+        ['mouseup', 'mouseleave'].forEach(e => window.addEventListener(e, endDraw));
+
+        // Touch events - handle separately with proper preventDefault
+        ['touchstart'].forEach(e => {
+            canvases.domain.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                activeCanvas = 'domain';
+                startDraw(evt);
+            }, { passive: false });
+            canvases.codomain.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                activeCanvas = 'codomain';
+                startDraw(evt);
+            }, { passive: false });
+        });
+
+        ['touchmove'].forEach(e => {
+            canvases.domain.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                moveDraw(evt);
+            }, { passive: false });
+            canvases.codomain.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                moveDraw(evt);
+            }, { passive: false });
+        });
+
+        ['touchend', 'touchcancel'].forEach(e => {
+            window.addEventListener(e, (evt) => {
+                evt.preventDefault();
+                endDraw(evt);
+            }, { passive: false });
+        });
         canvases.domain.addEventListener('mousemove', evt => {
             const p = getPos(evt, 'domain'), z = toComplex(p.x, p.y, 'domain');
             if (z.re == null || z.im == null) { tooltip.style.display = 'none'; return; }
@@ -2237,11 +2509,11 @@
                             img.onload = function () {
                                 // Determine which canvas to paste to based on cursor position or default to domain
                                 let targetCanvas = 'domain';
-                                
+
                                 // Check if mouse is over codomain canvas
                                 const codomainRect = canvases.codomain.getBoundingClientRect();
                                 const domainRect = canvases.domain.getBoundingClientRect();
-                                
+
                                 // Use the canvas where the mouse was last active, or default to domain
                                 if (lastMousePos.codomain.x > 0 && activeCanvas === 'codomain') {
                                     targetCanvas = 'codomain';
@@ -2249,7 +2521,7 @@
 
                                 const pos = lastMousePos[targetCanvas];
                                 addImage(img, pos.x || canvases[targetCanvas].width / 2, pos.y || canvases[targetCanvas].height / 2, targetCanvas);
-                                
+
                                 // Show a brief notification
                                 showNotification('Image pasted from clipboard!', targetCanvas);
                             };
@@ -2280,10 +2552,10 @@
                 transition: opacity 0.3s;
             `;
             notification.textContent = message;
-            
+
             const container = canvases[canvas].parentElement;
             container.appendChild(notification);
-            
+
             setTimeout(() => {
                 notification.style.opacity = '0';
                 setTimeout(() => container.removeChild(notification), 300);
@@ -2422,10 +2694,28 @@
         // Directional button controls for both panning and etch-a-sketch
         function setupDirectionalControls() {
             document.querySelectorAll('.direction-btn').forEach(btn => {
+                // Mouse click
                 btn.addEventListener('click', (evt) => {
+                    evt.preventDefault();
                     const direction = evt.target.dataset.direction;
                     handleDirectionalInput(direction);
                 });
+
+                // Touch handling for mobile
+                btn.addEventListener('touchstart', (evt) => {
+                    evt.preventDefault();
+                    const direction = evt.target.dataset.direction;
+                    handleDirectionalInput(direction);
+
+                    // Visual feedback
+                    evt.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                }, { passive: false });
+
+                btn.addEventListener('touchend', (evt) => {
+                    evt.preventDefault();
+                    // Reset visual feedback
+                    evt.target.style.background = 'rgba(0, 0, 0, 0.7)';
+                }, { passive: false });
             });
         }
 
@@ -2625,17 +2915,50 @@
         `;
 
         // Event listeners for help system
+        let lastTapTime = 0;
+        const doubleTapDelay = 300; // milliseconds
+
         helpBtn.addEventListener('click', () => {
             helpText.innerHTML = mainHelpContent;
             helpModal.style.display = 'block';
         });
 
-        // Hover tooltip for contextual help
+        // Double-tap detection for mobile
+        helpBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+
+            if (tapLength < doubleTapDelay && tapLength > 0) {
+                // Double tap detected
+                helpText.innerHTML = mainHelpContent;
+                helpModal.style.display = 'block';
+            } else {
+                // Single tap - show context help briefly on mobile
+                const contextHelp = getContextualHelpText();
+                hoverTooltip.innerHTML = contextHelp;
+                hoverTooltip.style.display = 'block';
+
+                // Position tooltip above the button
+                const rect = helpBtn.getBoundingClientRect();
+                hoverTooltip.style.left = rect.left + 'px';
+                hoverTooltip.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+
+                // Auto-hide after 3 seconds on mobile
+                setTimeout(() => {
+                    hoverTooltip.style.display = 'none';
+                }, 3000);
+            }
+
+            lastTapTime = currentTime;
+        });
+
+        // Hover tooltip for contextual help (desktop only)
         helpBtn.addEventListener('mouseenter', () => {
             const contextHelp = getContextualHelpText();
             hoverTooltip.innerHTML = contextHelp;
             hoverTooltip.style.display = 'block';
-            
+
             // Position tooltip above the button
             const rect = helpBtn.getBoundingClientRect();
             hoverTooltip.style.left = rect.left + 'px';
@@ -2649,11 +2972,11 @@
         function getContextualHelpText() {
             const fn = functionSelect.value;
             const tool = toolSelect.value;
-            
+
             let functionDesc = '';
             let suggestion = '';
-            
-            switch(fn) {
+
+            switch (fn) {
                 case 'z2':
                     functionDesc = "<strong>z² Function:</strong> Doubles angles, squares distances";
                     suggestion = "Try drawing circles at origin or lines through center to see squaring effect";
@@ -2708,7 +3031,7 @@
             }
 
             let toolInfo = '';
-            switch(tool) {
+            switch (tool) {
                 case 'chessboard':
                     toolInfo = "<strong>Grid Tool:</strong> Shows coordinate transformation";
                     break;
@@ -2746,6 +3069,39 @@
                 helpModal.style.display = 'none';
             }
         });
+
+        // Export functionality
+        const exportBtn = document.getElementById('exportBtn');
+
+        exportBtn.addEventListener('click', () => {
+            // Export both canvases using current theme
+            exportCanvas('domain');
+            setTimeout(() => exportCanvas('codomain'), 100); // Small delay to avoid conflicts
+        });
+
+        // Export function that uses current theme
+        function exportCanvas(canvasKey) {
+            const canvas = canvases[canvasKey];
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            // Fill background with current theme color
+            tempCtx.fillStyle = isDarkMode ? '#222222' : '#ffffff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Draw the original canvas content
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // Create download link
+            const link = document.createElement('a');
+            const themeName = isDarkMode ? 'dark' : 'light';
+            link.download = `complex-visualizer-${canvasKey}-${themeName}-${new Date().getTime()}.png`;
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        }
     </script>
     <!-- Thank You Icon -->
     <div id="thankYouIcon"
