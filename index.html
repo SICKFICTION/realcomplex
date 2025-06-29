@@ -149,10 +149,19 @@
 
         /* Mobile responsive adjustments for controls */
         @media (max-width: 768px) {
+            html {
+                overflow-y: auto;
+                /* Ensure html can scroll vertically */
+                height: 100%;
+            }
+
             body {
                 margin: 0;
                 padding: 0;
                 overflow-x: hidden;
+                overflow-y: auto;
+                /* Allow vertical scrolling on mobile */
+                height: 100%;
                 /* Remove body padding-bottom as it pushes content down */
             }
 
@@ -250,6 +259,12 @@
 
         /* Optimized for modern phones like Galaxy S20 FE (~408px width) */
         @media (max-width: 430px) and (min-width: 390px) {
+            body {
+                overflow-x: hidden;
+                overflow-y: auto;
+                /* Allow vertical scrolling on mobile */
+            }
+
             #controls {
                 padding: 3px 5px;
                 gap: 3px;
@@ -281,6 +296,12 @@
         }
 
         @media (max-width: 480px) {
+            body {
+                overflow-x: hidden;
+                overflow-y: auto;
+                /* Allow vertical scrolling on mobile */
+            }
+
             #controls {
                 font-size: 10px;
                 padding: 2px 4px;
@@ -764,12 +785,39 @@
 
         /* Mobile help modal improvements */
         @media (max-width: 768px) {
+            body {
+                /* Override the main overflow: hidden for mobile to allow scrolling */
+                overflow: hidden;
+                /* Keep horizontal hidden */
+                overflow-y: auto;
+                /* Allow vertical scrolling */
+            }
+
+            .help-modal {
+                /* Ensure modal can scroll properly on mobile */
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                /* Handle potential issues with mobile browsers */
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                height: 100vh;
+                /* Use viewport height */
+                width: 100vw;
+                /* Use viewport width */
+            }
+
             .help-content {
                 margin: 10px;
                 padding: 20px;
                 max-width: none;
                 border-radius: 8px;
                 font-size: 14px;
+                /* Ensure content doesn't get cut off */
+                min-height: calc(100vh - 40px);
+                box-sizing: border-box;
             }
 
             .help-content h1 {
