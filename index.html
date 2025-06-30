@@ -20,6 +20,16 @@
             transition: background-color 0.3s, color 0.3s;
             touch-action: manipulation;
             user-select: none;
+            scroll-behavior: smooth;
+        }
+
+        @media (orientation: portrait) {
+            html, body {
+                overflow-y: auto;
+                overflow-x: hidden;
+                height: auto;
+                min-height: 100vh;
+            }
         }
 
         /* Light mode styles */
@@ -103,14 +113,29 @@
             border-bottom: 1px solid #444;
             position: relative;
             min-height: 50px;
+            max-height: 120px;
             overflow-x: auto;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #555 transparent;
         }
 
         #controls::-webkit-scrollbar {
-            display: none;
-            /* Chrome/Safari */
+            width: 8px;
+            height: 8px;
+        }
+
+        #controls::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #controls::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        #controls::-webkit-scrollbar-thumb:hover {
+            background: #777;
         }
 
         #controls label {
@@ -137,16 +162,24 @@
         .main-content {
             display: flex;
             flex: 1;
-            height: calc(100vh - 60px);
+            height: 100vh;
             min-height: 0;
             gap: 10px;
             padding: 5px;
             box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         @media (orientation: portrait) {
             .main-content {
                 flex-direction: column;
+                align-items: center;
+                overflow-y: auto;
+                overflow-x: hidden;
+                height: auto;
+                min-height: 100vh;
+                padding-bottom: 20px;
             }
 
             .zoom-slider-container {
@@ -156,6 +189,7 @@
                 min-width: auto !important;
                 max-width: none !important;
                 padding: 10px 20px !important;
+                order: 2; /* Place between canvases */
             }
 
             .zoom-slider {
@@ -171,11 +205,21 @@
                 writing-mode: initial !important;
                 text-orientation: initial !important;
             }
+
+            .canvas-container:first-of-type {
+                order: 1; /* Domain canvas on top */
+            }
+
+            .canvas-container:last-of-type {
+                order: 3; /* Codomain canvas on bottom */
+            }
         }
 
         @media (orientation: landscape) {
             .main-content {
                 flex-direction: row;
+                height: calc(100vh - 60px);
+                overflow: hidden;
             }
         }
 
@@ -205,6 +249,16 @@
             flex: 1;
             min-width: 0;
             min-height: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (orientation: portrait) {
+            .canvas-container {
+                flex: none;
+                width: 100%;
+                margin: 10px 0;
+            }
         }
 
         /* Zoom Slider Between Canvases */
@@ -220,6 +274,14 @@
             min-width: 60px;
             max-width: 80px;
             border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        @media (orientation: portrait) {
+            .zoom-slider-container {
+                margin: 10px 0;
+                align-self: center;
+            }
         }
 
         .zoom-slider {
@@ -258,7 +320,6 @@
         }
 
         canvas {
-            flex: 1;
             background: #222;
             cursor: crosshair;
             touch-action: none;
@@ -267,7 +328,13 @@
             border-radius: 4px;
             display: block;
             margin: 0 auto;
-            /* Remove CSS sizing that causes scaling issues */
+            /* Ensure 1:1 pixel ratio for perfect square grids */
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            /* Force aspect ratio to be maintained */
+            object-fit: contain;
+            aspect-ratio: 1 / 1;
         }
 
         .domain {
@@ -1239,61 +1306,50 @@
             scale = baseScale * zoomVal;
 
             // Calculate available space accounting for browser UI
-            const controlsHeight = 60;
+            const controlsElement = document.getElementById('controls');
+            const controlsHeight = controlsElement ? controlsElement.offsetHeight : 60;
 
-            // More accurate viewport calculation for different browsers
-            // Use the smaller of the two to ensure compatibility
-            const viewportHeight = Math.min(
-                document.documentElement.clientHeight || window.innerHeight,
-                window.innerHeight
-            );
-            const viewportWidth = Math.min(
-                document.documentElement.clientWidth || window.innerWidth,
-                window.innerWidth
-            );
+            // Accurate viewport calculation that accounts for actual visible area
+            const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
 
-            // Enhanced browser UI buffer calculation based on platform and browser
-            let browserUIBuffer = 40; // Base buffer
-
-            // Detect mobile devices for larger UI buffer
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            if (isMobile) {
-                browserUIBuffer = 80; // Larger buffer for mobile browsers
-            }
-
-            // Additional buffer for full-screen mode detection
-            if (window.outerHeight - window.innerHeight > 100) {
-                browserUIBuffer += 20; // Extra buffer when browser UI is visible
-            }
-
-            const availableHeight = viewportHeight - controlsHeight - browserUIBuffer;
+            // Calculate available space for canvases
+            const availableHeight = viewportHeight - controlsHeight;
             const availableWidth = viewportWidth;
 
-            // Determine orientation and calculate canvas size
-            const isPortrait = window.innerHeight > window.innerWidth;
-            let newWidth, newHeight;
+            // Determine orientation and calculate SQUARE canvas size
+            const isPortrait = viewportHeight > viewportWidth;
+            let canvasSize;
 
             if (isPortrait) {
-                // Portrait: stack vertically, force square canvases
+                // Portrait: stack vertically, ensure both canvases fit with square aspect ratio
                 const zoomSliderHeight = 60;
-                const extraPadding = 60; // Increased padding for browser UI
-                const usableHeight = availableHeight - zoomSliderHeight - extraPadding;
-                const canvasSize = Math.min(availableWidth - 20, usableHeight / 2 - 20); // Increased spacing between canvases
-                const size = Math.max(canvasSize, 200);
-                newWidth = Math.floor(size);
-                newHeight = Math.floor(size);
+                const padding = 40; // Total padding for gaps and margins
+                const usableHeight = availableHeight - zoomSliderHeight - padding;
+                
+                // Calculate size to fit two square canvases vertically
+                const maxSizeByHeight = Math.floor(usableHeight / 2);
+                const maxSizeByWidth = Math.floor(availableWidth - 20); // Account for side margins
+                
+                canvasSize = Math.min(maxSizeByHeight, maxSizeByWidth);
+                canvasSize = Math.max(canvasSize, 150); // Minimum size
             } else {
-                // Landscape: side by side, maximize canvas area without forcing square
+                // Landscape: side by side, ensure both canvases fit with square aspect ratio
                 const zoomSliderWidth = 80;
-                const extraPadding = 40; // Additional padding for landscape
-                const usableWidth = availableWidth - zoomSliderWidth - extraPadding;
-                const maxWidth = Math.floor((usableWidth / 2) - 15); // Increased spacing between canvases
-                const maxHeight = Math.floor(availableHeight - 30); // Increased bottom padding
-
-                // Use maximum available space, not forced square
-                newWidth = Math.max(maxWidth, 200);
-                newHeight = Math.max(maxHeight, 200);
+                const padding = 40; // Total padding for gaps and margins
+                const usableWidth = availableWidth - zoomSliderWidth - padding;
+                
+                // Calculate size to fit two square canvases horizontally
+                const maxSizeByWidth = Math.floor(usableWidth / 2);
+                const maxSizeByHeight = Math.floor(availableHeight - 30); // Account for top/bottom margins
+                
+                canvasSize = Math.min(maxSizeByWidth, maxSizeByHeight);
+                canvasSize = Math.max(canvasSize, 150); // Minimum size
             }
+
+            // ALWAYS square canvases - this ensures grid lines remain square
+            const newWidth = Math.floor(canvasSize);
+            const newHeight = Math.floor(canvasSize);
 
             // Check if size actually changed to avoid unnecessary work
             const sizeChanged = newWidth !== lastCanvasSize.width || newHeight !== lastCanvasSize.height;
@@ -1335,13 +1391,14 @@
                 y: oldCodomainOrigin.y - oldCodomainCenter.y
             } : { x: 0, y: 0 };
 
-            // Apply new canvas dimensions
+            // Apply new square canvas dimensions
             canvases.domain.width = newWidth;
             canvases.domain.height = newHeight;
             canvases.codomain.width = newWidth;
             canvases.codomain.height = newHeight;
 
-            // Set CSS dimensions to match internal canvas dimensions
+            // Set CSS dimensions to match internal canvas dimensions exactly
+            // This ensures the canvas pixel grid matches the display grid perfectly
             canvases.domain.style.width = newWidth + 'px';
             canvases.domain.style.height = newHeight + 'px';
             canvases.codomain.style.width = newWidth + 'px';
@@ -1387,6 +1444,12 @@
             ];
         }
         window.addEventListener('resize', resize);
+        
+        // Listen for visual viewport changes (mobile browser UI changes)
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', resize);
+        }
+        
         // This was triggering resize on every tiny device movement, causing pan to reset
         // zoom slider listener with debounced transformation updates
         const zoomSlider = document.getElementById('zoomSlider');
