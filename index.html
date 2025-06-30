@@ -563,6 +563,7 @@
                 <option value="chessboard">Integer Grid</option>
                 <option value="text">Text</option>
                 <option value="image">Image</option>
+                <option value="video">Video</option>
             </select>
         </label>
         <label id="paramLabel" style="display:none">
@@ -586,6 +587,47 @@
                 <option value="Impact">Impact</option>
                 <option value="Comic Sans MS">Comic</option>
             </select>
+        </label>
+        <label id="videoLabel" style="display:none">
+            Animation:
+            <select id="animationSelect" style="width:120px; font-size:11px;">
+                <option value="rainbow_waves">Rainbow Waves</option>
+                <option value="rotating_spiral">Rotating Spiral</option>
+                <option value="pulsing_circles">Pulsing Circles</option>
+                <option value="grid_pattern">Grid Pattern</option>
+                <option value="mandelbrot">Mandelbrot Zoom</option>
+                <option value="julia_set">Julia Set</option>
+                <option value="plasma">Plasma Field</option>
+                <option value="fire">Fire Effect</option>
+                <option value="water_ripples">Water Ripples</option>
+                <option value="galaxy_spiral">Galaxy Spiral</option>
+                <option value="dna_helix">DNA Helix</option>
+                <option value="kaleidoscope">Kaleidoscope</option>
+                <option value="matrix_rain">Matrix Rain</option>
+                <option value="aurora">Aurora Borealis</option>
+                <option value="lava_lamp">Lava Lamp</option>
+                <option value="starfield">Starfield</option>
+                <option value="neural_network">Neural Network</option>
+                <option value="waves_interference">Wave Interference</option>
+                <option value="fractal_tree">Fractal Tree</option>
+                <option value="lightning">Lightning</option>
+                <option value="voronoi">Voronoi Cells</option>
+                <option value="perlin_noise">Perlin Noise</option>
+                <option value="cellular_automata">Cellular Automata</option>
+                <option value="pendulum">Double Pendulum</option>
+                <option value="lorenz_attractor">Lorenz Attractor</option>
+                <option value="magnetic_field">Magnetic Field</option>
+                <option value="crystal_growth">Crystal Growth</option>
+                <option value="flowing_sand">Flowing Sand</option>
+                <option value="electric_arcs">Electric Arcs</option>
+                <option value="hypnotic_spiral">Hypnotic Spiral</option>
+                <option value="particle_system">Particle System</option>
+                <option value="fluid_dynamics">Fluid Dynamics</option>
+                <option value="geometric_dance">Geometric Dance</option>
+                <option value="color_tunnel">Color Tunnel</option>
+                <option value="breathing_squares">Breathing Squares</option>
+            </select>
+            <button id="loadAnimationBtn" style="padding:2px 6px; font-size:11px;">Load</button>
         </label>
         <button id="undoBtn">Undo</button>
         <button id="clearBtn">Clear</button>
@@ -653,6 +695,9 @@
         const fontSizeInput = document.getElementById('fontSizeInput');
         const fontColorInput = document.getElementById('fontColorInput');
         const fontFamilyInput = document.getElementById('fontFamilyInput');
+        const videoLabel = document.getElementById('videoLabel');
+        const animationSelect = document.getElementById('animationSelect');
+        const loadAnimationBtn = document.getElementById('loadAnimationBtn');
         const clearBtn = document.getElementById('clearBtn');
         const undoBtn = document.getElementById('undoBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -845,7 +890,7 @@
 
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
-        const MAX_STROKES = 6, strokes = [], dots = [], texts = [], images = [];
+        const MAX_STROKES = 6, strokes = [], dots = [], texts = [], images = [], videos = [];
 
         // Snap to grid state
         let snapToGrid = false;
@@ -885,6 +930,11 @@
         let textDragOffset = { x: 0, y: 0 };
         let isDraggingImageCorner = false;
         let draggedImageCornerIndex = -1;
+        let isDraggingVideo = false;
+        let draggedVideoIndex = -1;
+        let videoDragOffset = { x: 0, y: 0 };
+        let isDraggingVideoCorner = false;
+        let draggedVideoCornerIndex = -1;
 
         // Modifier key state for different drag modes
         let isShiftPressed = false;
@@ -1190,7 +1240,7 @@
 
             // Calculate available space accounting for browser UI
             const controlsHeight = 60;
-            
+
             // More accurate viewport calculation for different browsers
             // Use the smaller of the two to ensure compatibility
             const viewportHeight = Math.min(
@@ -1204,18 +1254,18 @@
 
             // Enhanced browser UI buffer calculation based on platform and browser
             let browserUIBuffer = 40; // Base buffer
-            
+
             // Detect mobile devices for larger UI buffer
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             if (isMobile) {
                 browserUIBuffer = 80; // Larger buffer for mobile browsers
             }
-            
+
             // Additional buffer for full-screen mode detection
             if (window.outerHeight - window.innerHeight > 100) {
                 browserUIBuffer += 20; // Extra buffer when browser UI is visible
             }
-            
+
             const availableHeight = viewportHeight - controlsHeight - browserUIBuffer;
             const availableWidth = viewportWidth;
 
@@ -1407,11 +1457,15 @@
         toolSelect.addEventListener('change', () => {
             paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
             textLabel.style.display = (toolSelect.value === 'text') ? 'inline-block' : 'none';
+            videoLabel.style.display = (toolSelect.value === 'video') ? 'inline-block' : 'none';
             if (toolSelect.value === 'chessboard') {
                 initChessboard();
             }
             if (toolSelect.value === 'image') {
                 showImageInstructions();
+            }
+            if (toolSelect.value === 'video') {
+                showVideoInstructions();
             }
         });
 
@@ -1858,6 +1912,73 @@
                     }
                 });
             });
+
+            // Draw videos
+            videos.forEach((video, index) => {
+                ['domain', 'codomain'].forEach(key => {
+                    const g = ctx[key];
+                    const isOriginal = key === video.canvas;
+
+                    if (isOriginal) {
+                        // Always draw video rectangle outline to show video area
+                        if (toolSelect.value === 'video') {
+                            g.strokeStyle = '#00ff88';
+                            g.lineWidth = 2;
+
+                            // Draw border following the actual corners (warped shape)
+                            g.beginPath();
+                            g.moveTo(video.corners[0].x, video.corners[0].y); // top-left
+                            g.lineTo(video.corners[1].x, video.corners[1].y); // top-right
+                            g.lineTo(video.corners[2].x, video.corners[2].y); // bottom-right
+                            g.lineTo(video.corners[3].x, video.corners[3].y); // bottom-left
+                            g.closePath();
+                            g.stroke();
+
+                            // Draw corners when in video mode
+                            video.corners.forEach((corner, i) => {
+                                g.fillStyle = '#ff3333';
+                                g.beginPath();
+                                g.arc(corner.x, corner.y, 6, 0, 2 * Math.PI);
+                                g.fill();
+                                g.strokeStyle = '#fff';
+                                g.lineWidth = 2;
+                                g.stroke();
+                            });
+                        }
+
+                        // Draw video content if available
+                        if (video.warpedPoints && video.warpedPoints.length > 0) {
+                            drawWarpedVideo(g, video);
+                        } else {
+                            // Show placeholder when video is loading or not yet processed
+                            g.fillStyle = 'rgba(0, 255, 136, 0.1)';
+                            g.beginPath();
+                            g.moveTo(video.corners[0].x, video.corners[0].y);
+                            g.lineTo(video.corners[1].x, video.corners[1].y);
+                            g.lineTo(video.corners[2].x, video.corners[2].y);
+                            g.lineTo(video.corners[3].x, video.corners[3].y);
+                            g.closePath();
+                            g.fill();
+
+                            // Add loading text
+                            g.fillStyle = isDarkMode ? '#ffffff' : '#000000';
+                            g.font = '14px Arial';
+                            g.textAlign = 'center';
+                            g.textBaseline = 'middle';
+                            const centerX = (video.corners[0].x + video.corners[2].x) / 2;
+                            const centerY = (video.corners[0].y + video.corners[2].y) / 2;
+                            g.fillText(getAnimationName(video.animationType), centerX, centerY - 10);
+                            g.fillText('Loading...', centerX, centerY + 10);
+                        }
+                    } else if (video.transformedPoints) {
+                        // Draw transformed video
+                        drawTransformedVideo(g, video);
+                    }
+                });
+            });
+
+            // Update iframe positions for videos
+            updateVideoIframePositions();
         }
 
         function drawShape(g, pts, mode) { if (!pts || pts.length < 2) return; g.beginPath(); g.moveTo(pts[0].x, pts[0].y); pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); }); if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath(); g.stroke(); }
@@ -2019,6 +2140,27 @@
                     draggedImageIndex = imageIndex;
                     const img = images[imageIndex];
                     imageDragOffset = { x: p.x - img.x, y: p.y - img.y };
+                    return;
+                }
+            }
+
+            // Handle video corner dragging
+            if (toolSelect.value === 'video') {
+                const videoCorner = findVideoCornerAt(p.x, p.y, activeCanvas);
+                if (videoCorner) {
+                    isDraggingVideoCorner = true;
+                    draggedVideoIndex = videoCorner.videoIndex;
+                    draggedVideoCornerIndex = videoCorner.cornerIndex;
+                    return;
+                }
+
+                // Handle video dragging (whole video)
+                const videoIndex = getVideoAt(p.x, p.y, activeCanvas);
+                if (videoIndex !== -1) {
+                    isDraggingVideo = true;
+                    draggedVideoIndex = videoIndex;
+                    const video = videos[videoIndex];
+                    videoDragOffset = { x: p.x - video.x, y: p.y - video.y };
                     return;
                 }
             }
@@ -2229,6 +2371,70 @@
                 return;
             }
 
+            // Handle video corner dragging with different modes
+            if (isDraggingVideoCorner && draggedVideoIndex !== -1 && draggedVideoCornerIndex !== -1) {
+                evt.preventDefault();
+                const video = videos[draggedVideoIndex];
+
+                if (isShiftPressed) {
+                    // SHIFT: Free warping - move only the selected corner
+                    video.corners[draggedVideoCornerIndex] = p;
+                } else if (isCtrlPressed) {
+                    // CTRL: Proportional scaling from center
+                    const center = { x: video.x, y: video.y };
+                    const cornerIndex = draggedVideoCornerIndex;
+                    const dx = p.x - center.x;
+                    const dy = p.y - center.y;
+                    const distance = Math.hypot(dx, dy);
+                    const originalCorner = video.corners[cornerIndex];
+                    const originalDistance = Math.hypot(originalCorner.x - center.x, originalCorner.y - center.y);
+                    const scale = distance / originalDistance;
+
+                    // Scale all corners proportionally
+                    video.corners = video.corners.map(corner => ({
+                        x: center.x + (corner.x - center.x) * scale,
+                        y: center.y + (corner.y - center.y) * scale
+                    }));
+                } else {
+                    // Default: Rectangular resize maintaining aspect ratio
+                    const dx = Math.abs(p.x - video.x) * 2;
+                    const dy = Math.abs(p.y - video.y) * 2;
+                    video.width = Math.max(dx, 50);
+                    video.height = Math.max(dy, 40);
+
+                    video.corners = [
+                        { x: video.x - dx / 2, y: video.y - dy / 2 }, // top-left
+                        { x: video.x + dx / 2, y: video.y - dy / 2 }, // top-right
+                        { x: video.x + dx / 2, y: video.y + dy / 2 }, // bottom-right
+                        { x: video.x - dx / 2, y: video.y + dy / 2 }  // bottom-left
+                    ];
+                }
+
+                updateVideoFromCorners(draggedVideoIndex);
+                redrawAll();
+                return;
+            }
+
+            // Handle video dragging
+            if (isDraggingVideo && draggedVideoIndex !== -1) {
+                evt.preventDefault();
+                const video = videos[draggedVideoIndex];
+                const dx = p.x - videoDragOffset.x - video.x;
+                const dy = p.y - videoDragOffset.y - video.y;
+
+                // Move all corners by the same offset
+                video.corners.forEach(corner => {
+                    corner.x += dx;
+                    corner.y += dy;
+                });
+
+                video.x = p.x - videoDragOffset.x;
+                video.y = p.y - videoDragOffset.y;
+                video.canvas = activeCanvas; // Allow moving between canvases
+                redrawAll();
+                return;
+            }
+
             // Handle chessboard corner dragging
             if (isDraggingCorner && dragCornerIndex !== -1 && activeCanvas === 'domain') {
                 evt.preventDefault();
@@ -2314,6 +2520,21 @@
             if (isDraggingImage) {
                 isDraggingImage = false;
                 draggedImageIndex = -1;
+                return;
+            }
+
+            // Handle video corner dragging end
+            if (isDraggingVideoCorner) {
+                isDraggingVideoCorner = false;
+                draggedVideoIndex = -1;
+                draggedVideoCornerIndex = -1;
+                return;
+            }
+
+            // Handle video dragging end
+            if (isDraggingVideo) {
+                isDraggingVideo = false;
+                draggedVideoIndex = -1;
                 return;
             }
 
@@ -2415,6 +2636,40 @@
                     const maxX = Math.max(img.corners[0].x, img.corners[1].x, img.corners[2].x, img.corners[3].x);
                     const minY = Math.min(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
                     const maxY = Math.max(img.corners[0].y, img.corners[1].y, img.corners[2].y, img.corners[3].y);
+
+                    if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+
+        // Helper function to find video corner at point
+        function findVideoCornerAt(x, y, canvas) {
+            for (let i = 0; i < videos.length; i++) {
+                const video = videos[i];
+                if (video.canvas !== canvas) continue;
+
+                for (let j = 0; j < video.corners.length; j++) {
+                    if (isNearCorner({ x, y }, video.corners[j], 12)) {
+                        return { videoIndex: i, cornerIndex: j };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Helper function to get video at point
+        function getVideoAt(x, y, canvas) {
+            for (let i = videos.length - 1; i >= 0; i--) {
+                const video = videos[i];
+                if (video.canvas === canvas) {
+                    // Check if point is inside video bounds (simplified bounding box check)
+                    const minX = Math.min(video.corners[0].x, video.corners[1].x, video.corners[2].x, video.corners[3].x);
+                    const maxX = Math.max(video.corners[0].x, video.corners[1].x, video.corners[2].x, video.corners[3].x);
+                    const minY = Math.min(video.corners[0].y, video.corners[1].y, video.corners[2].y, video.corners[3].y);
+                    const maxY = Math.max(video.corners[0].y, video.corners[1].y, video.corners[2].y, video.corners[3].y);
 
                     if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
                         return i;
@@ -2750,7 +3005,32 @@
             canvases.codomain.style.cursor = cursor;
         });
         canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
-        clearBtn.addEventListener('click', () => { strokes.length = 0; dots.length = 0; texts.length = 0; images.length = 0; redrawAll(); });
+        clearBtn.addEventListener('click', () => { 
+            strokes.length = 0; 
+            dots.length = 0; 
+            texts.length = 0; 
+            images.length = 0; 
+            // Stop and clean up videos
+            videos.forEach(video => {
+                if (video.animationFrame) {
+                    cancelAnimationFrame(video.animationFrame);
+                }
+            });
+            videos.length = 0; 
+            redrawAll(); 
+        });
+
+        // Load animation button functionality
+        loadAnimationBtn.addEventListener('click', () => {
+            const animationType = animationSelect.value;
+            
+            // Add animation at center of active canvas
+            const centerX = canvases[activeCanvas].width / 2;
+            const centerY = canvases[activeCanvas].height / 2;
+            
+            addAnimation(animationType, centerX, centerY, activeCanvas);
+            showNotification(`${getAnimationName(animationType)} loaded! Ready to transform!`, activeCanvas);
+        });
 
         // Undo functionality - removes the most recent item
         undoBtn.addEventListener('click', () => {
@@ -2762,6 +3042,12 @@
                 texts.pop();
             } else if (images.length > 0) {
                 images.pop();
+            } else if (videos.length > 0) {
+                const video = videos.pop();
+                // Clean up video resources
+                if (video.animationFrame) {
+                    cancelAnimationFrame(video.animationFrame);
+                }
             }
             redrawAll();
         });
@@ -3251,6 +3537,926 @@
             showNotification('Image Mode: Drag & drop files OR paste from clipboard (Ctrl+V)! Images transform mathematically!', activeCanvas);
         }
 
+        function showVideoInstructions() {
+            showNotification('Animation Mode: Select from 35 amazing animated patterns and watch them transform in real-time! Each animation creates unique mathematical art when warped!', activeCanvas);
+        }
+
+        function getAnimationName(type) {
+            const names = {
+                rainbow_waves: "Rainbow Waves",
+                rotating_spiral: "Rotating Spiral", 
+                pulsing_circles: "Pulsing Circles",
+                grid_pattern: "Grid Pattern",
+                mandelbrot: "Mandelbrot Zoom",
+                julia_set: "Julia Set",
+                plasma: "Plasma Field",
+                fire: "Fire Effect",
+                water_ripples: "Water Ripples",
+                galaxy_spiral: "Galaxy Spiral",
+                dna_helix: "DNA Helix",
+                kaleidoscope: "Kaleidoscope",
+                matrix_rain: "Matrix Rain",
+                aurora: "Aurora Borealis",
+                lava_lamp: "Lava Lamp",
+                starfield: "Starfield",
+                neural_network: "Neural Network",
+                waves_interference: "Wave Interference",
+                fractal_tree: "Fractal Tree",
+                lightning: "Lightning",
+                voronoi: "Voronoi Cells",
+                perlin_noise: "Perlin Noise",
+                cellular_automata: "Cellular Automata",
+                pendulum: "Double Pendulum",
+                lorenz_attractor: "Lorenz Attractor",
+                magnetic_field: "Magnetic Field",
+                crystal_growth: "Crystal Growth",
+                flowing_sand: "Flowing Sand",
+                electric_arcs: "Electric Arcs",
+                hypnotic_spiral: "Hypnotic Spiral",
+                particle_system: "Particle System",
+                fluid_dynamics: "Fluid Dynamics",
+                geometric_dance: "Geometric Dance",
+                color_tunnel: "Color Tunnel",
+                breathing_squares: "Breathing Squares"
+            };
+            return names[type] || "Animation";
+        }
+
+        // Video processing functions
+        function extractVideoId(url) {
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        }
+
+        function createAnimationElement(animationType) {
+            // Create a canvas for the animation
+            const animationCanvas = document.createElement('canvas');
+            const animationCtx = animationCanvas.getContext('2d');
+            animationCanvas.width = 320;
+            animationCanvas.height = 240;
+
+            return {
+                canvas: animationCanvas,
+                ctx: animationCtx,
+                isPlaying: false,
+                animationType: animationType
+            };
+        }
+
+        function addAnimation(animationType, x, y, canvas) {
+            const animationElement = createAnimationElement(animationType);
+            
+            // Default animation size
+            const defaultSize = Math.min(canvases[canvas].width, canvases[canvas].height) * 0.3;
+            const width = defaultSize;
+            const height = defaultSize * 0.75; // 4:3 aspect ratio
+
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+
+            const video = {
+                element: animationElement,
+                canvas: canvas,
+                x: x,
+                y: y,
+                width: width,
+                height: height,
+                animationType: animationType,
+                transformedPoints: [],
+                warpedPoints: [],
+                lastFrameTime: 0,
+                animationFrame: null,
+                animationTime: 0, // Track animation progress
+                corners: [
+                    { x: x - halfWidth, y: y - halfHeight }, // Top-left
+                    { x: x + halfWidth, y: y - halfHeight }, // Top-right
+                    { x: x + halfWidth, y: y + halfHeight }, // Bottom-right
+                    { x: x - halfWidth, y: y + halfHeight } // Bottom-left
+                ]
+            };
+
+            // Start real-time processing
+            startAnimationProcessing(video);
+            videos.push(video);
+            redrawAll();
+        }
+
+        function updateVideoIframePositions() {
+            // No longer needed for animations - keeping function for compatibility
+            return;
+        }
+
+        function startAnimationProcessing(video) {
+            const processFrame = () => {
+                if (!video.element.isPlaying) {
+                    video.animationFrame = requestAnimationFrame(processFrame);
+                    return;
+                }
+
+                const now = Date.now();
+                if (now - video.lastFrameTime > 50) { // ~20 FPS for performance
+                    // Generate animation frame based on type
+                    generateAnimationFrame(video);
+                    updateVideoTransformation(video);
+                    video.lastFrameTime = now;
+                    video.animationTime += 0.05; // Increment animation time
+                    redrawAll();
+                }
+
+                video.animationFrame = requestAnimationFrame(processFrame);
+            };
+
+            // Start playing immediately
+            video.element.isPlaying = true;
+            processFrame();
+        }
+
+        function generateAnimationFrame(video) {
+            const canvas = video.element.canvas;
+            const ctx = video.element.ctx;
+            const time = video.animationTime;
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            const imageData = ctx.createImageData(width, height);
+            const data = imageData.data;
+
+            switch (video.animationType) {
+                case 'rainbow_waves':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const wave1 = Math.sin((x + time * 50) * 0.02) * 0.5 + 0.5;
+                            const wave2 = Math.sin((y + time * 30) * 0.03) * 0.5 + 0.5;
+                            const wave3 = Math.sin((x + y + time * 40) * 0.015) * 0.5 + 0.5;
+                            data[index] = Math.floor(wave1 * wave3 * 255);
+                            data[index + 1] = Math.floor(wave2 * wave3 * 255);
+                            data[index + 2] = Math.floor(wave1 * wave2 * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'rotating_spiral':
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dx = x - centerX;
+                            const dy = y - centerY;
+                            const angle = Math.atan2(dy, dx) + time * 0.5;
+                            const radius = Math.sqrt(dx * dx + dy * dy);
+                            const spiral = Math.sin(radius * 0.1 - time * 2) * 0.5 + 0.5;
+                            data[index] = Math.floor((Math.sin(angle + time) * 0.5 + 0.5) * spiral * 255);
+                            data[index + 1] = Math.floor((Math.sin(angle + time + 2) * 0.5 + 0.5) * spiral * 255);
+                            data[index + 2] = Math.floor((Math.sin(angle + time + 4) * 0.5 + 0.5) * spiral * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'pulsing_circles':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const circles = 3;
+                            let intensity = 0;
+                            for (let i = 0; i < circles; i++) {
+                                const cx = (width / circles) * (i + 0.5);
+                                const cy = height / 2;
+                                const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+                                const pulse = Math.sin(dist * 0.1 - time * 3 + i) * 0.5 + 0.5;
+                                intensity += pulse / circles;
+                            }
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 180);
+                            data[index + 2] = Math.floor(intensity * 100);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'mandelbrot':
+                    const zoom = 0.5 + Math.sin(time * 0.1) * 0.3;
+                    const offsetX = Math.sin(time * 0.05) * 0.5;
+                    const offsetY = Math.cos(time * 0.05) * 0.5;
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const a = (x / width - 0.5) * 4 * zoom + offsetX;
+                            const b = (y / height - 0.5) * 4 * zoom + offsetY;
+                            let ca = a, cb = b;
+                            let n = 0;
+                            while (n < 100 && ca * ca + cb * cb < 4) {
+                                const temp = ca * ca - cb * cb + a;
+                                cb = 2 * ca * cb + b;
+                                ca = temp;
+                                n++;
+                            }
+                            const color = n / 100;
+                            data[index] = Math.floor(Math.sin(color * 16 + time) * 127 + 128);
+                            data[index + 1] = Math.floor(Math.sin(color * 16 + time + 2) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.sin(color * 16 + time + 4) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'julia_set':
+                    const cx = Math.sin(time * 0.1) * 0.7;
+                    const cy = Math.cos(time * 0.1) * 0.7;
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            let a = (x / width - 0.5) * 3;
+                            let b = (y / height - 0.5) * 3;
+                            let n = 0;
+                            while (n < 100 && a * a + b * b < 4) {
+                                const temp = a * a - b * b + cx;
+                                b = 2 * a * b + cy;
+                                a = temp;
+                                n++;
+                            }
+                            const color = n / 100;
+                            data[index] = Math.floor(color * 255);
+                            data[index + 1] = Math.floor(Math.sin(color * 10 + time) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.cos(color * 10 + time) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'plasma':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const plasma = Math.sin(x * 0.04 + time) +
+                                          Math.sin(y * 0.03 + time * 1.2) +
+                                          Math.sin((x + y) * 0.02 + time * 0.8) +
+                                          Math.sin(Math.sqrt(x * x + y * y) * 0.02 + time * 1.5);
+                            const color = (plasma + 4) / 8;
+                            data[index] = Math.floor(Math.sin(color * Math.PI * 2) * 127 + 128);
+                            data[index + 1] = Math.floor(Math.sin(color * Math.PI * 2 + 2) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.sin(color * Math.PI * 2 + 4) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'fire':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const flame = Math.sin(x * 0.1 + time * 2) * Math.sin(y * 0.05 + time) * 
+                                         Math.sin((x + y) * 0.03 + time * 1.5);
+                            const intensity = Math.max(0, flame * (height - y) / height);
+                            data[index] = Math.floor(Math.min(255, intensity * 400));
+                            data[index + 1] = Math.floor(Math.min(255, intensity * 200));
+                            data[index + 2] = Math.floor(Math.min(255, intensity * 50));
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'water_ripples':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dist1 = Math.sqrt((x - width/3) ** 2 + (y - height/3) ** 2);
+                            const dist2 = Math.sqrt((x - 2*width/3) ** 2 + (y - 2*height/3) ** 2);
+                            const ripple = Math.sin(dist1 * 0.1 - time * 2) + Math.sin(dist2 * 0.1 - time * 2.5);
+                            const intensity = (ripple + 2) / 4;
+                            data[index] = Math.floor(intensity * 100);
+                            data[index + 1] = Math.floor(intensity * 150);
+                            data[index + 2] = Math.floor(intensity * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'galaxy_spiral':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dx = x - width/2;
+                            const dy = y - height/2;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx) + dist * 0.01 - time * 0.5;
+                            const spiral = Math.sin(angle * 3) * Math.exp(-dist * 0.01);
+                            const intensity = Math.max(0, spiral);
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 200);
+                            data[index + 2] = Math.floor(intensity * 150);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'dna_helix':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const t = y / height * 10 - time;
+                            const helix1 = Math.sin(t) * 50 + width/2;
+                            const helix2 = Math.cos(t) * 50 + width/2;
+                            const dist1 = Math.abs(x - helix1);
+                            const dist2 = Math.abs(x - helix2);
+                            const intensity = Math.max(0, 1 - Math.min(dist1, dist2) / 20);
+                            data[index] = Math.floor(intensity * 100);
+                            data[index + 1] = Math.floor(intensity * 255);
+                            data[index + 2] = Math.floor(intensity * 150);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'kaleidoscope':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dx = x - width/2;
+                            const dy = y - height/2;
+                            const angle = Math.atan2(dy, dx);
+                            const kaleidoAngle = ((angle + time) % (Math.PI / 3)) * 6;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const pattern = Math.sin(kaleidoAngle * 5) * Math.sin(dist * 0.1 + time);
+                            const intensity = (pattern + 1) / 2;
+                            data[index] = Math.floor(Math.sin(intensity * Math.PI + time) * 127 + 128);
+                            data[index + 1] = Math.floor(Math.sin(intensity * Math.PI + time + 2) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.sin(intensity * Math.PI + time + 4) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'matrix_rain':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const col = Math.floor(x / 10);
+                            const drop = (y + time * 100 + col * 50) % height;
+                            const trail = Math.max(0, 1 - Math.abs(y - drop) / 30);
+                            data[index] = 0;
+                            data[index + 1] = Math.floor(trail * 255);
+                            data[index + 2] = 0;
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'aurora':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const wave = Math.sin((x + time * 30) * 0.01) * 20;
+                            const curtain = Math.max(0, 1 - Math.abs(y - height/2 - wave) / 50);
+                            const shimmer = Math.sin(x * 0.1 + time * 3) * 0.3 + 0.7;
+                            data[index] = Math.floor(curtain * shimmer * 100);
+                            data[index + 1] = Math.floor(curtain * shimmer * 255);
+                            data[index + 2] = Math.floor(curtain * shimmer * 150);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'lava_lamp':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const blob1 = Math.sin(time + x * 0.02) * 30 + width/3;
+                            const blob2 = Math.cos(time * 1.2 + y * 0.02) * 30 + 2*width/3;
+                            const dist1 = Math.sqrt((x - blob1)**2 + (y - height/3)**2);
+                            const dist2 = Math.sqrt((x - blob2)**2 + (y - 2*height/3)**2);
+                            const field = 1000 / (dist1 + 10) + 1000 / (dist2 + 10);
+                            const intensity = Math.min(1, field / 100);
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 100);
+                            data[index + 2] = 0;
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'starfield':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const starX = (x + time * 50) % width;
+                            const starY = (y + time * 30) % height;
+                            const noise = Math.sin(starX * 0.1) * Math.sin(starY * 0.1);
+                            const star = noise > 0.9 ? 1 : 0;
+                            const twinkle = Math.sin(time * 5 + starX + starY) * 0.5 + 0.5;
+                            data[index] = Math.floor(star * twinkle * 255);
+                            data[index + 1] = Math.floor(star * twinkle * 255);
+                            data[index + 2] = Math.floor(star * twinkle * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'neural_network':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const nodes = [[width/4, height/4], [3*width/4, height/4], [width/2, 3*height/4]];
+                            let minDist = Infinity;
+                            for (const node of nodes) {
+                                const dist = Math.sqrt((x - node[0])**2 + (y - node[1])**2);
+                                minDist = Math.min(minDist, dist);
+                            }
+                            const pulse = Math.sin(time * 2 - minDist * 0.1) * 0.5 + 0.5;
+                            const connection = Math.max(0, 1 - minDist / 100) * pulse;
+                            data[index] = Math.floor(connection * 255);
+                            data[index + 1] = Math.floor(connection * 100);
+                            data[index + 2] = Math.floor(connection * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'waves_interference':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const wave1 = Math.sin((x - width/3) * 0.1 - time * 2);
+                            const wave2 = Math.sin((x - 2*width/3) * 0.1 - time * 2.5);
+                            const interference = (wave1 + wave2) / 2;
+                            const intensity = (interference + 1) / 2;
+                            data[index] = Math.floor(intensity * 100);
+                            data[index + 1] = Math.floor(intensity * 200);
+                            data[index + 2] = Math.floor(intensity * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'lightning':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const bolt = Math.sin(x * 0.1 + Math.random() * time) * 10;
+                            const strike = Math.abs(y - height/2 - bolt) < 3 ? 1 : 0;
+                            const flicker = Math.random() > 0.7 ? 1 : 0;
+                            data[index] = Math.floor(strike * flicker * 255);
+                            data[index + 1] = Math.floor(strike * flicker * 255);
+                            data[index + 2] = Math.floor(strike * flicker * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'hypnotic_spiral':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dx = x - width/2;
+                            const dy = y - height/2;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+                            const spiral = Math.sin(angle * 10 + dist * 0.1 - time * 3);
+                            const intensity = (spiral + 1) / 2;
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 255);
+                            data[index + 2] = Math.floor(intensity * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'particle_system':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const particles = 50;
+                            let intensity = 0;
+                            for (let i = 0; i < particles; i++) {
+                                const px = (Math.sin(time + i) * 100 + width/2);
+                                const py = (Math.cos(time * 1.2 + i) * 80 + height/2);
+                                const dist = Math.sqrt((x - px)**2 + (y - py)**2);
+                                intensity += Math.max(0, 1 - dist / 20);
+                            }
+                            intensity = Math.min(1, intensity / 10);
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 200);
+                            data[index + 2] = Math.floor(intensity * 100);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'fluid_dynamics':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const flow = Math.sin(x * 0.02 + time) * Math.cos(y * 0.02 + time * 1.1);
+                            const turbulence = Math.sin(x * 0.1 + time * 2) * Math.sin(y * 0.1 + time * 1.8);
+                            const fluid = (flow + turbulence * 0.3 + 1) / 2;
+                            data[index] = Math.floor(fluid * 100);
+                            data[index + 1] = Math.floor(fluid * 180);
+                            data[index + 2] = Math.floor(fluid * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'geometric_dance':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const shapes = Math.sin(x * 0.1 + time) * Math.cos(y * 0.1 + time) +
+                                          Math.sin(x * 0.05 + time * 1.5) * Math.cos(y * 0.05 + time * 1.5);
+                            const intensity = (shapes + 2) / 4;
+                            data[index] = Math.floor(Math.sin(intensity * Math.PI + time) * 127 + 128);
+                            data[index + 1] = Math.floor(Math.sin(intensity * Math.PI + time + 2) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.sin(intensity * Math.PI + time + 4) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'color_tunnel':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const dx = x - width/2;
+                            const dy = y - height/2;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+                            const tunnel = Math.sin(dist * 0.05 - time * 2) + Math.sin(angle * 8 + time);
+                            const intensity = (tunnel + 2) / 4;
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(Math.sin(intensity * Math.PI + time) * 127 + 128);
+                            data[index + 2] = Math.floor(Math.cos(intensity * Math.PI + time) * 127 + 128);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'breathing_squares':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const size = Math.sin(time) * 20 + 40;
+                            const gridX = Math.floor(x / size) % 2;
+                            const gridY = Math.floor(y / size) % 2;
+                            const checker = (gridX + gridY) % 2;
+                            const breathing = Math.sin(time * 2) * 0.5 + 0.5;
+                            data[index] = Math.floor(checker * breathing * 255);
+                            data[index + 1] = Math.floor(checker * breathing * 200);
+                            data[index + 2] = Math.floor(checker * breathing * 150);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'voronoi':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const sites = [
+                                [Math.sin(time) * 100 + width/2, Math.cos(time) * 80 + height/2],
+                                [Math.sin(time + 2) * 80 + width/3, Math.cos(time + 2) * 100 + height/3],
+                                [Math.sin(time + 4) * 120 + 2*width/3, Math.cos(time + 4) * 90 + 2*height/3]
+                            ];
+                            let minDist = Infinity;
+                            let closestSite = 0;
+                            for (let i = 0; i < sites.length; i++) {
+                                const dist = Math.sqrt((x - sites[i][0])**2 + (y - sites[i][1])**2);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    closestSite = i;
+                                }
+                            }
+                            const colors = [[255, 100, 100], [100, 255, 100], [100, 100, 255]];
+                            data[index] = colors[closestSite][0];
+                            data[index + 1] = colors[closestSite][1];
+                            data[index + 2] = colors[closestSite][2];
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'perlin_noise':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            // Simplified Perlin-like noise
+                            const noise = Math.sin(x * 0.1 + time) * Math.cos(y * 0.1 + time) +
+                                         Math.sin(x * 0.05 + time * 1.2) * Math.cos(y * 0.05 + time * 1.2) * 0.5 +
+                                         Math.sin(x * 0.02 + time * 0.8) * Math.cos(y * 0.02 + time * 0.8) * 0.25;
+                            const intensity = (noise + 1.75) / 3.5;
+                            data[index] = Math.floor(intensity * 200);
+                            data[index + 1] = Math.floor(intensity * 255);
+                            data[index + 2] = Math.floor(intensity * 180);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'cellular_automata':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const cell = Math.sin(x * 0.2 + time) * Math.sin(y * 0.2 + time) > 0 ? 1 : 0;
+                            const evolution = Math.sin(time + x + y) > 0 ? 1 : 0;
+                            const state = cell ^ evolution; // XOR for interesting patterns
+                            data[index] = state * 255;
+                            data[index + 1] = state * 200;
+                            data[index + 2] = state * 100;
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'pendulum':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const pendulum1X = Math.sin(time) * 100 + width/2;
+                            const pendulum1Y = Math.cos(time) * 100 + height/2;
+                            const pendulum2X = Math.sin(time * 1.1 + 1) * 80 + pendulum1X;
+                            const pendulum2Y = Math.cos(time * 1.1 + 1) * 80 + pendulum1Y;
+                            const dist1 = Math.sqrt((x - pendulum1X)**2 + (y - pendulum1Y)**2);
+                            const dist2 = Math.sqrt((x - pendulum2X)**2 + (y - pendulum2Y)**2);
+                            const trail = Math.max(0, 1 - Math.min(dist1, dist2) / 30);
+                            data[index] = Math.floor(trail * 255);
+                            data[index + 1] = Math.floor(trail * 150);
+                            data[index + 2] = Math.floor(trail * 50);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'lorenz_attractor':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            // Simplified Lorenz-like attractor
+                            const px = Math.sin(time + x * 0.01) * Math.cos(time * 1.1);
+                            const py = Math.cos(time + y * 0.01) * Math.sin(time * 0.9);
+                            const attractorX = px * 50 + width/2;
+                            const attractorY = py * 50 + height/2;
+                            const dist = Math.sqrt((x - attractorX)**2 + (y - attractorY)**2);
+                            const field = Math.max(0, 1 - dist / 40);
+                            data[index] = Math.floor(field * 255);
+                            data[index + 1] = Math.floor(field * 100);
+                            data[index + 2] = Math.floor(field * 200);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'magnetic_field':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const poles = [[width/3, height/2], [2*width/3, height/2]];
+                            let fieldX = 0, fieldY = 0;
+                            for (let i = 0; i < poles.length; i++) {
+                                const dx = x - poles[i][0];
+                                const dy = y - poles[i][1];
+                                const dist = Math.sqrt(dx*dx + dy*dy) + 1;
+                                const force = 1000 / (dist * dist);
+                                fieldX += force * dx / dist * (i === 0 ? 1 : -1);
+                                fieldY += force * dy / dist * (i === 0 ? 1 : -1);
+                            }
+                            const fieldMag = Math.sqrt(fieldX*fieldX + fieldY*fieldY);
+                            const intensity = Math.min(1, fieldMag / 10);
+                            data[index] = Math.floor(intensity * 100);
+                            data[index + 1] = Math.floor(intensity * 255);
+                            data[index + 2] = Math.floor(intensity * 200);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'crystal_growth':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const centerX = width/2;
+                            const centerY = height/2;
+                            const dx = x - centerX;
+                            const dy = y - centerY;
+                            const angle = Math.atan2(dy, dx);
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            const crystal = Math.sin(angle * 6) * Math.sin(dist * 0.1 - time);
+                            const growth = Math.max(0, crystal * (1 - dist / 100));
+                            data[index] = Math.floor(growth * 200);
+                            data[index + 1] = Math.floor(growth * 255);
+                            data[index + 2] = Math.floor(growth * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'flowing_sand':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const flow = Math.sin(x * 0.1 + time * 2) + y * 0.01;
+                            const sand = Math.sin(flow + Math.sin(x * 0.05) * 10) > 0 ? 1 : 0;
+                            const drift = Math.sin(time + x * 0.02) * 0.2 + 0.8;
+                            data[index] = Math.floor(sand * drift * 255);
+                            data[index + 1] = Math.floor(sand * drift * 200);
+                            data[index + 2] = Math.floor(sand * drift * 100);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'electric_arcs':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const arc1 = Math.sin(x * 0.1 + time * 3 + Math.sin(y * 0.1)) * 20;
+                            const arc2 = Math.sin(x * 0.15 + time * 2.5 + Math.cos(y * 0.05)) * 15;
+                            const electric = Math.abs(y - height/2 - arc1) < 2 || Math.abs(y - height/3 - arc2) < 2 ? 1 : 0;
+                            const intensity = electric * (Math.sin(time * 10) * 0.3 + 0.7);
+                            data[index] = Math.floor(intensity * 255);
+                            data[index + 1] = Math.floor(intensity * 255);
+                            data[index + 2] = Math.floor(intensity * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'fractal_tree':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const centerX = width/2;
+                            const treeY = height - 50;
+                            const angle = Math.atan2(y - treeY, x - centerX);
+                            const dist = Math.sqrt((x - centerX)**2 + (y - treeY)**2);
+                            const branch = Math.sin(angle * 4 + time) * Math.sin(dist * 0.1) > 0.5 ? 1 : 0;
+                            const trunk = Math.abs(x - centerX) < 5 && y > treeY ? 1 : 0;
+                            const tree = branch || trunk;
+                            data[index] = Math.floor(tree * 139);
+                            data[index + 1] = Math.floor(tree * 69);
+                            data[index + 2] = Math.floor(tree * 19);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                case 'grid_pattern':
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const gridSize = 20;
+                            const gridX = Math.floor((x + time * 10) / gridSize) % 2;
+                            const gridY = Math.floor((y + time * 15) / gridSize) % 2;
+                            const checker = (gridX + gridY) % 2;
+                            const colorShift = time * 0.5;
+                            data[index] = Math.floor((Math.sin(colorShift) * 0.5 + 0.5) * checker * 255);
+                            data[index + 1] = Math.floor((Math.sin(colorShift + 2) * 0.5 + 0.5) * checker * 255);
+                            data[index + 2] = Math.floor((Math.sin(colorShift + 4) * 0.5 + 0.5) * checker * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+                    break;
+
+                default:
+                    // Default to rainbow waves for unknown types
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const index = (y * width + x) * 4;
+                            const wave1 = Math.sin((x + time * 50) * 0.02) * 0.5 + 0.5;
+                            const wave2 = Math.sin((y + time * 30) * 0.03) * 0.5 + 0.5;
+                            const wave3 = Math.sin((x + y + time * 40) * 0.015) * 0.5 + 0.5;
+                            data[index] = Math.floor(wave1 * wave3 * 255);
+                            data[index + 1] = Math.floor(wave2 * wave3 * 255);
+                            data[index + 2] = Math.floor(wave1 * wave2 * 255);
+                            data[index + 3] = 255;
+                        }
+                    }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function updateVideoTransformation(video) {
+            // Similar to image transformation but optimized for real-time
+            const transformedPoints = [];
+            const warpedPoints = [];
+
+            const sourceCanvas = video.element.canvas;
+            const sourceCtx = video.element.ctx;
+            const sourceImageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+            const sourceData = sourceImageData.data;
+
+            // Use lower resolution for real-time performance
+            const sampleStep = 4; // Lower resolution for video
+            const transformedSampleStep = 2; // Higher resolution for transformation
+
+            // Generate points for warped display on original canvas
+            for (let y = 0; y < video.height; y += sampleStep) {
+                for (let x = 0; x < video.width; x += sampleStep) {
+                    const u = x / video.width;
+                    const v = y / video.height;
+
+                    const worldPos = bilinearInterpolate(video.corners, u, v);
+
+                    const imgX = Math.floor(x * sourceCanvas.width / video.width);
+                    const imgY = Math.floor(y * sourceCanvas.height / video.height);
+
+                    if (imgX >= 0 && imgX < sourceCanvas.width && imgY >= 0 && imgY < sourceCanvas.height) {
+                        const pixelIndex = (imgY * sourceCanvas.width + imgX) * 4;
+                        const r = sourceData[pixelIndex];
+                        const g = sourceData[pixelIndex + 1];
+                        const b = sourceData[pixelIndex + 2];
+                        const a = sourceData[pixelIndex + 3];
+
+                        if (a > 25) {
+                            warpedPoints.push({
+                                x: worldPos.x,
+                                y: worldPos.y,
+                                color: `rgba(${r},${g},${b},${a/255})`,
+                                size: 2
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Generate higher resolution points for transformation
+            for (let y = 0; y < video.height; y += transformedSampleStep) {
+                for (let x = 0; x < video.width; x += transformedSampleStep) {
+                    const u = x / video.width;
+                    const v = y / video.height;
+
+                    const worldPos = bilinearInterpolate(video.corners, u, v);
+
+                    const z = toComplex(worldPos.x, worldPos.y, video.canvas);
+                    const w = video.canvas === 'domain' ? userFn(z) : invFn(z);
+                    const transformedPt = toCanvas(w, video.canvas === 'domain' ? 'codomain' : 'domain');
+
+                    const imgX = Math.floor(x * sourceCanvas.width / video.width);
+                    const imgY = Math.floor(y * sourceCanvas.height / video.height);
+
+                    if (imgX >= 0 && imgX < sourceCanvas.width && imgY >= 0 && imgY < sourceCanvas.height) {
+                        const pixelIndex = (imgY * sourceCanvas.width + imgX) * 4;
+                        const r = sourceData[pixelIndex];
+                        const g = sourceData[pixelIndex + 1];
+                        const b = sourceData[pixelIndex + 2];
+                        const a = sourceData[pixelIndex + 3];
+
+                        if (a > 25 && isFinite(transformedPt.x) && isFinite(transformedPt.y)) {
+                            transformedPoints.push({
+                                x: transformedPt.x,
+                                y: transformedPt.y,
+                                color: `rgba(${r},${g},${b},${a/255})`,
+                                size: 1.5
+                            });
+                        }
+                    }
+                }
+            }
+
+            video.transformedPoints = transformedPoints;
+            video.warpedPoints = warpedPoints;
+        }
+
+        function drawTransformedVideo(g, video) {
+            if (!video.transformedPoints || video.transformedPoints.length === 0) return;
+
+            const canvasWidth = g.canvas.width;
+            const canvasHeight = g.canvas.height;
+
+            video.transformedPoints.forEach(pt => {
+                if (isFinite(pt.x) && isFinite(pt.y)) {
+                    const margin = pt.size || 2;
+                    if (pt.x >= -margin && pt.x <= canvasWidth + margin && 
+                        pt.y >= -margin && pt.y <= canvasHeight + margin) {
+                        g.fillStyle = pt.color;
+                        g.beginPath();
+                        g.arc(pt.x, pt.y, pt.size, 0, 2 * Math.PI);
+                        g.fill();
+                    }
+                }
+            });
+        }
+
+        function drawWarpedVideo(g, video) {
+            if (!video.warpedPoints || video.warpedPoints.length === 0) return;
+
+            video.warpedPoints.forEach(pt => {
+                if (isFinite(pt.x) && isFinite(pt.y)) {
+                    g.fillStyle = pt.color;
+                    g.beginPath();
+                    g.arc(pt.x, pt.y, pt.size, 0, 2 * Math.PI);
+                    g.fill();
+                }
+            });
+        }
+
         function drawTransformedImage(g, img) {
             if (!img.transformedPoints || img.transformedPoints.length === 0) return;
 
@@ -3691,6 +4897,23 @@
             image.height = maxY - minY;
 
             updateImageTransformation(image);
+        }
+
+        function updateVideoFromCorners(videoIndex) {
+            const video = videos[videoIndex];
+            const corners = video.corners;
+
+            // Calculate new bounds from corners
+            const minX = Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const maxX = Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x);
+            const minY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+            const maxY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+
+            // Update position to center of bounds
+            video.x = (minX + maxX) / 2;
+            video.y = (minY + maxY) / 2;
+            video.width = maxX - minX;
+            video.height = maxY - minY;
         }
 
         function drawWarpedImage(g, img) {
