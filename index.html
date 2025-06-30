@@ -627,12 +627,12 @@
                 <option value="color_tunnel">Color Tunnel</option>
                 <option value="breathing_squares">Breathing Squares</option>
             </select>
-            <button id="loadAnimationBtn" style="padding:2px 6px; font-size:11px;">Load</button>
+            <button id="loadAnimationBtn" style="display:none; padding:2px 6px; font-size:11px;">Load</button>
         </label>
         <button id="undoBtn">Undo</button>
         <button id="clearBtn">Clear</button>
         <label><input type="checkbox" id="continuousToggle" checked /> Continuous</label>
-        <label><input type="checkbox" id="snapToGridToggle" /> Snap grid</label>
+        <label><input type="checkbox" id="snapToGridToggle" checked /> Snap grid</label>
         <button id="themeToggle"
             style="background: #444; color: #eee; border: 1px solid #666; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px;">🌙</button>
     </div>
@@ -890,10 +890,10 @@
 
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
-        const MAX_STROKES = 6, strokes = [], dots = [], texts = [], images = [], videos = [];
+        const strokes = [], dots = [], texts = [], images = [], videos = [];
 
         // Snap to grid state
-        let snapToGrid = false;
+        let snapToGrid = true;
         let hoverSnapTimeout = null;
         let clickSnapTimeout = null;
         let lastMousePosition = { x: 0, y: 0 };
@@ -1462,10 +1462,25 @@
                 initChessboard();
             }
             if (toolSelect.value === 'image') {
-                showImageInstructions();
+                // Image mode activated
             }
             if (toolSelect.value === 'video') {
-                showVideoInstructions();
+                // Video mode activated - always load first animation for instant wow
+                animationSelect.selectedIndex = 0; // Select first animation (rainbow_waves)
+                const animationType = animationSelect.value;
+
+                // Clear any existing videos first
+                videos.forEach(video => {
+                    if (video.animationFrame) {
+                        cancelAnimationFrame(video.animationFrame);
+                    }
+                });
+                videos.length = 0;
+
+                // Add animation at center of active canvas
+                const centerX = canvases[activeCanvas].width / 2;
+                const centerY = canvases[activeCanvas].height / 2;
+                addAnimation(animationType, centerX, centerY, activeCanvas);
             }
         });
 
@@ -1710,10 +1725,17 @@
             }
 
             strokes.forEach((s, i) => {
-                const alpha = i < strokes.length - MAX_STROKES ? 0.2 : 1;
-                const baseColor = `hsla(${s.hue},70%,${isDarkMode ? 60 : 40}%,${alpha})`;
+                const baseColor = `hsla(${s.hue},70%,${isDarkMode ? 60 : 40}%,1)`;
                 ['domain', 'codomain'].forEach(key => {
-                    const pts = key === s.canvas ? s.pts : s.imagePts, g = ctx[key];
+                    // Use smoothed points when available, fallback to original points
+                    let pts;
+                    if (s.smoothedPts && s.smoothedImagePts) {
+                        pts = key === s.canvas ? s.smoothedPts : s.smoothedImagePts;
+                    } else {
+                        pts = key === s.canvas ? s.pts : s.imagePts;
+                    }
+
+                    const g = ctx[key];
 
                     // Skip drawing if no points
                     if (!pts || pts.length === 0) return;
@@ -1981,7 +2003,156 @@
             updateVideoIframePositions();
         }
 
-        function drawShape(g, pts, mode) { if (!pts || pts.length < 2) return; g.beginPath(); g.moveTo(pts[0].x, pts[0].y); pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); }); if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath(); g.stroke(); }
+        function drawShape(g, pts, mode) {
+            if (!pts || pts.length < 2) return;
+
+            g.beginPath();
+
+            // Apply smoothing for freehand drawing
+            if (mode === 'freehand' && pts.length > 3) {
+                drawSmoothCurve(g, pts);
+            } else {
+                // Standard drawing for other shapes
+                g.moveTo(pts[0].x, pts[0].y);
+                pts.forEach((p, i) => { if (i > 0) g.lineTo(p.x, p.y); });
+            }
+
+            if (!['freehand', 'line', 'sine', 'spiral', 'dot', 'etch'].includes(mode)) g.closePath();
+            g.stroke();
+        }
+
+        // Smooth curve drawing using Bezier curves for professional quality
+        function drawSmoothCurve(g, pts) {
+            if (pts.length < 2) return;
+
+            // Start at first point
+            g.moveTo(pts[0].x, pts[0].y);
+
+            if (pts.length === 2) {
+                g.lineTo(pts[1].x, pts[1].y);
+                return;
+            }
+
+            if (pts.length === 3) {
+                // For 3 points, use quadratic curve
+                g.quadraticCurveTo(pts[1].x, pts[1].y, pts[2].x, pts[2].y);
+                return;
+            }
+
+            // For 4+ points, use cubic Bezier curves for maximum smoothness
+            for (let i = 0; i < pts.length - 1; i++) {
+                const current = pts[i];
+                const next = pts[i + 1];
+
+                if (i === 0) {
+                    // First segment
+                    const cp1x = current.x + (next.x - current.x) * 0.3;
+                    const cp1y = current.y + (next.y - current.y) * 0.3;
+                    const cp2x = next.x - (pts[i + 2] ? (pts[i + 2].x - current.x) * 0.2 : (next.x - current.x) * 0.3);
+                    const cp2y = next.y - (pts[i + 2] ? (pts[i + 2].y - current.y) * 0.2 : (next.y - current.y) * 0.3);
+
+                    g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+                } else if (i === pts.length - 2) {
+                    // Last segment
+                    const prev = pts[i - 1];
+                    const cp1x = current.x + (next.x - prev.x) * 0.2;
+                    const cp1y = current.y + (next.y - prev.y) * 0.2;
+                    const cp2x = next.x - (next.x - current.x) * 0.3;
+                    const cp2y = next.y - (next.y - current.y) * 0.3;
+
+                    g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+                } else {
+                    // Middle segments
+                    const prev = pts[i - 1];
+                    const next2 = pts[i + 2];
+
+                    const cp1x = current.x + (next.x - prev.x) * 0.2;
+                    const cp1y = current.y + (next.y - prev.y) * 0.2;
+                    const cp2x = next.x - (next2.x - current.x) * 0.2;
+                    const cp2y = next.y - (next2.y - current.y) * 0.2;
+
+                    g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+                }
+            }
+        }
+
+        // Point smoothing and filtering for freehand drawing
+        function smoothPoints(pts, tolerance = 3) {
+            if (pts.length <= 2) return pts;
+
+            const smoothed = [pts[0]]; // Always keep first point
+
+            for (let i = 1; i < pts.length - 1; i++) {
+                const prev = pts[i - 1];
+                const curr = pts[i];
+                const next = pts[i + 1];
+
+                // Distance-based filtering - skip points too close together
+                const distToPrev = Math.sqrt(Math.pow(curr.x - prev.x, 2) + Math.pow(curr.y - prev.y, 2));
+                if (distToPrev < tolerance) continue;
+
+                // Average with neighboring points for smoothness
+                const smoothX = (prev.x + curr.x + next.x) / 3;
+                const smoothY = (prev.y + curr.y + next.y) / 3;
+
+                smoothed.push({ x: smoothX, y: smoothY });
+            }
+
+            // Always keep last point
+            if (pts.length > 1) {
+                smoothed.push(pts[pts.length - 1]);
+            }
+
+            return smoothed;
+        }
+
+        // Advanced Catmull-Rom spline smoothing for high-quality curve rendering
+        function catmullRomSmooth(pts, segments = 4) {
+            if (pts.length < 2) return pts;
+            if (pts.length === 2) return pts;
+
+            const smoothed = [];
+
+            // Add first point
+            smoothed.push(pts[0]);
+
+            // Generate spline between each pair of points
+            for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i < pts.length - 2 ? pts[i + 2] : pts[i + 1];
+
+                // Generate segments between p1 and p2
+                for (let t = 0; t <= segments; t++) {
+                    const u = t / segments;
+                    const u2 = u * u;
+                    const u3 = u2 * u;
+
+                    // Catmull-Rom spline formula
+                    const x = 0.5 * (
+                        (2 * p1.x) +
+                        (-p0.x + p2.x) * u +
+                        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * u2 +
+                        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * u3
+                    );
+
+                    const y = 0.5 * (
+                        (2 * p1.y) +
+                        (-p0.y + p2.y) * u +
+                        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * u2 +
+                        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * u3
+                    );
+
+                    // Skip the first point of each segment (except for the very first)
+                    if (t > 0 || i === 0) {
+                        smoothed.push({ x, y });
+                    }
+                }
+            }
+
+            return smoothed;
+        }
 
         function computePts(tool, A, B) {
             // Apply snap to grid to endpoints if enabled
@@ -2457,14 +2628,23 @@
 
             if (tool === 'freehand') {
                 evt.preventDefault();
-                currentPts.push(p);
-                redrawAll();
-                ['domain', 'codomain'].forEach(key => {
-                    const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key));
-                    ctx[key].strokeStyle = isDarkMode ? '#fff' : '#000';
-                    ctx[key].lineWidth = 2;
-                    drawShape(ctx[key], pts, 'freehand');
-                });
+
+                // Add point with distance filtering to reduce jitter
+                const lastPt = currentPts[currentPts.length - 1];
+                const minDistance = 2; // Minimum distance between points
+
+                if (!lastPt || Math.sqrt(Math.pow(p.x - lastPt.x, 2) + Math.pow(p.y - lastPt.y, 2)) >= minDistance) {
+                    currentPts.push(p);
+
+                    redrawAll();
+                    ['domain', 'codomain'].forEach(key => {
+                        // For real-time drawing, use original points but with smooth rendering
+                        const pts = key === activeCanvas ? currentPts : currentPts.map(pt => toCanvas(tool === 'freehand' ? (activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas))) : toComplex(pt.x, pt.y, activeCanvas), key));
+                        ctx[key].strokeStyle = isDarkMode ? '#fff' : '#000';
+                        ctx[key].lineWidth = 2;
+                        drawShape(ctx[key], pts, 'freehand');
+                    });
+                }
             } else if (tool !== 'dot' && tool !== 'chessboard') {
                 evt.preventDefault();
                 const pts = computePts(tool, startPt, p);
@@ -2557,10 +2737,38 @@
             const tool = toolSelect.value;
             if (tool === 'dot' || tool === 'chessboard') return;
             const ePt = getPos(evt, activeCanvas);
-            const pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt);
+
+            // Get the original points (preserve raw input)
+            let pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt);
+
+            // Create smoothed points for all curved shapes
+            let smoothedPts = pts;
+            if (tool === 'freehand' && pts.length > 2) {
+                if (pts.length > 10) {
+                    // For longer strokes, use advanced Catmull-Rom smoothing for display
+                    smoothedPts = catmullRomSmooth(pts, 4);
+                } else {
+                    // For shorter strokes, use simpler smoothing for display
+                    smoothedPts = smoothPoints(pts, 1.5);
+                }
+            } else if (['circle', 'spiral', 'sine', 'star', 'polygon'].includes(tool) && pts.length > 3) {
+                // Apply light smoothing to geometric shapes for better rendering
+                smoothedPts = smoothPoints(pts, 1);
+            }
+
             const img = pts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
-            strokes.push({ canvas: activeCanvas, mode: tool, pts: pts, imagePts: img, hue: Math.random() * 360 });
-            if (strokes.length > MAX_STROKES) strokes.shift();
+            const smoothedImg = smoothedPts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
+
+            // Store both original and smoothed points
+            strokes.push({
+                canvas: activeCanvas,
+                mode: tool,
+                pts: pts,  // Original points for mathematical accuracy
+                imagePts: img,  // Original transformed points
+                smoothedPts: smoothedPts,  // Smoothed points for rendering
+                smoothedImagePts: smoothedImg,  // Smoothed transformed points
+                hue: Math.random() * 360
+            });
             redrawAll();
         }
         function getPos(evt, key) {
@@ -3005,31 +3213,51 @@
             canvases.codomain.style.cursor = cursor;
         });
         canvases.domain.addEventListener('mouseleave', () => tooltip.style.display = 'none'); canvases.codomain.addEventListener('mouseleave', () => tooltip.style.display = 'none');
-        clearBtn.addEventListener('click', () => { 
-            strokes.length = 0; 
-            dots.length = 0; 
-            texts.length = 0; 
-            images.length = 0; 
+        clearBtn.addEventListener('click', () => {
+            strokes.length = 0;
+            dots.length = 0;
+            texts.length = 0;
+            images.length = 0;
             // Stop and clean up videos
             videos.forEach(video => {
                 if (video.animationFrame) {
                     cancelAnimationFrame(video.animationFrame);
                 }
             });
-            videos.length = 0; 
-            redrawAll(); 
+            videos.length = 0;
+            redrawAll();
         });
 
-        // Load animation button functionality
+        // Animation select functionality - instant loading, replace existing video
+        animationSelect.addEventListener('change', () => {
+            const animationType = animationSelect.value;
+
+            if (animationType) {
+                // Clear any existing videos first (only one video at a time)
+                videos.forEach(video => {
+                    if (video.animationFrame) {
+                        cancelAnimationFrame(video.animationFrame);
+                    }
+                });
+                videos.length = 0; // Clear the array
+
+                // Add new animation at center of active canvas
+                const centerX = canvases[activeCanvas].width / 2;
+                const centerY = canvases[activeCanvas].height / 2;
+
+                addAnimation(animationType, centerX, centerY, activeCanvas);
+            }
+        });
+
+        // Load animation button functionality (kept for compatibility but not needed)
         loadAnimationBtn.addEventListener('click', () => {
             const animationType = animationSelect.value;
-            
+
             // Add animation at center of active canvas
             const centerX = canvases[activeCanvas].width / 2;
             const centerY = canvases[activeCanvas].height / 2;
-            
+
             addAnimation(animationType, centerX, centerY, activeCanvas);
-            showNotification(`${getAnimationName(animationType)} loaded! Ready to transform!`, activeCanvas);
         });
 
         // Undo functionality - removes the most recent item
@@ -3534,17 +3762,17 @@
         functionSelect.addEventListener('change', clearTransformationCache);
 
         function showImageInstructions() {
-            showNotification('Image Mode: Drag & drop files OR paste from clipboard (Ctrl+V)! Images transform mathematically!', activeCanvas);
+            // Image mode ready
         }
 
         function showVideoInstructions() {
-            showNotification('Animation Mode: Select from 35 amazing animated patterns and watch them transform in real-time! Each animation creates unique mathematical art when warped!', activeCanvas);
+            // Video mode ready - animations will appear at full canvas size
         }
 
         function getAnimationName(type) {
             const names = {
                 rainbow_waves: "Rainbow Waves",
-                rotating_spiral: "Rotating Spiral", 
+                rotating_spiral: "Rotating Spiral",
                 pulsing_circles: "Pulsing Circles",
                 grid_pattern: "Grid Pattern",
                 mandelbrot: "Mandelbrot Zoom",
@@ -3590,11 +3818,11 @@
         }
 
         function createAnimationElement(animationType) {
-            // Create a canvas for the animation
+            // Create a canvas for the animation with high resolution
             const animationCanvas = document.createElement('canvas');
             const animationCtx = animationCanvas.getContext('2d');
-            animationCanvas.width = 320;
-            animationCanvas.height = 240;
+            animationCanvas.width = 1024;  // Higher resolution for full canvas
+            animationCanvas.height = 768;
 
             return {
                 canvas: animationCanvas,
@@ -3606,11 +3834,10 @@
 
         function addAnimation(animationType, x, y, canvas) {
             const animationElement = createAnimationElement(animationType);
-            
-            // Default animation size
-            const defaultSize = Math.min(canvases[canvas].width, canvases[canvas].height) * 0.3;
-            const width = defaultSize;
-            const height = defaultSize * 0.75; // 4:3 aspect ratio
+
+            // Full canvas animation size for instant wow effect
+            const width = canvases[canvas].width * 0.95; // 95% of canvas width
+            const height = canvases[canvas].height * 0.95; // 95% of canvas height
 
             const halfWidth = width / 2;
             const halfHeight = height / 2;
@@ -3797,9 +4024,9 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const plasma = Math.sin(x * 0.04 + time) +
-                                          Math.sin(y * 0.03 + time * 1.2) +
-                                          Math.sin((x + y) * 0.02 + time * 0.8) +
-                                          Math.sin(Math.sqrt(x * x + y * y) * 0.02 + time * 1.5);
+                                Math.sin(y * 0.03 + time * 1.2) +
+                                Math.sin((x + y) * 0.02 + time * 0.8) +
+                                Math.sin(Math.sqrt(x * x + y * y) * 0.02 + time * 1.5);
                             const color = (plasma + 4) / 8;
                             data[index] = Math.floor(Math.sin(color * Math.PI * 2) * 127 + 128);
                             data[index + 1] = Math.floor(Math.sin(color * Math.PI * 2 + 2) * 127 + 128);
@@ -3813,8 +4040,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const flame = Math.sin(x * 0.1 + time * 2) * Math.sin(y * 0.05 + time) * 
-                                         Math.sin((x + y) * 0.03 + time * 1.5);
+                            const flame = Math.sin(x * 0.1 + time * 2) * Math.sin(y * 0.05 + time) *
+                                Math.sin((x + y) * 0.03 + time * 1.5);
                             const intensity = Math.max(0, flame * (height - y) / height);
                             data[index] = Math.floor(Math.min(255, intensity * 400));
                             data[index + 1] = Math.floor(Math.min(255, intensity * 200));
@@ -3828,8 +4055,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const dist1 = Math.sqrt((x - width/3) ** 2 + (y - height/3) ** 2);
-                            const dist2 = Math.sqrt((x - 2*width/3) ** 2 + (y - 2*height/3) ** 2);
+                            const dist1 = Math.sqrt((x - width / 3) ** 2 + (y - height / 3) ** 2);
+                            const dist2 = Math.sqrt((x - 2 * width / 3) ** 2 + (y - 2 * height / 3) ** 2);
                             const ripple = Math.sin(dist1 * 0.1 - time * 2) + Math.sin(dist2 * 0.1 - time * 2.5);
                             const intensity = (ripple + 2) / 4;
                             data[index] = Math.floor(intensity * 100);
@@ -3844,8 +4071,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const dx = x - width/2;
-                            const dy = y - height/2;
+                            const dx = x - width / 2;
+                            const dy = y - height / 2;
                             const dist = Math.sqrt(dx * dx + dy * dy);
                             const angle = Math.atan2(dy, dx) + dist * 0.01 - time * 0.5;
                             const spiral = Math.sin(angle * 3) * Math.exp(-dist * 0.01);
@@ -3863,8 +4090,8 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const t = y / height * 10 - time;
-                            const helix1 = Math.sin(t) * 50 + width/2;
-                            const helix2 = Math.cos(t) * 50 + width/2;
+                            const helix1 = Math.sin(t) * 50 + width / 2;
+                            const helix2 = Math.cos(t) * 50 + width / 2;
                             const dist1 = Math.abs(x - helix1);
                             const dist2 = Math.abs(x - helix2);
                             const intensity = Math.max(0, 1 - Math.min(dist1, dist2) / 20);
@@ -3880,8 +4107,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const dx = x - width/2;
-                            const dy = y - height/2;
+                            const dx = x - width / 2;
+                            const dy = y - height / 2;
                             const angle = Math.atan2(dy, dx);
                             const kaleidoAngle = ((angle + time) % (Math.PI / 3)) * 6;
                             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3915,7 +4142,7 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const wave = Math.sin((x + time * 30) * 0.01) * 20;
-                            const curtain = Math.max(0, 1 - Math.abs(y - height/2 - wave) / 50);
+                            const curtain = Math.max(0, 1 - Math.abs(y - height / 2 - wave) / 50);
                             const shimmer = Math.sin(x * 0.1 + time * 3) * 0.3 + 0.7;
                             data[index] = Math.floor(curtain * shimmer * 100);
                             data[index + 1] = Math.floor(curtain * shimmer * 255);
@@ -3929,10 +4156,10 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const blob1 = Math.sin(time + x * 0.02) * 30 + width/3;
-                            const blob2 = Math.cos(time * 1.2 + y * 0.02) * 30 + 2*width/3;
-                            const dist1 = Math.sqrt((x - blob1)**2 + (y - height/3)**2);
-                            const dist2 = Math.sqrt((x - blob2)**2 + (y - 2*height/3)**2);
+                            const blob1 = Math.sin(time + x * 0.02) * 30 + width / 3;
+                            const blob2 = Math.cos(time * 1.2 + y * 0.02) * 30 + 2 * width / 3;
+                            const dist1 = Math.sqrt((x - blob1) ** 2 + (y - height / 3) ** 2);
+                            const dist2 = Math.sqrt((x - blob2) ** 2 + (y - 2 * height / 3) ** 2);
                             const field = 1000 / (dist1 + 10) + 1000 / (dist2 + 10);
                             const intensity = Math.min(1, field / 100);
                             data[index] = Math.floor(intensity * 255);
@@ -3964,10 +4191,10 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const nodes = [[width/4, height/4], [3*width/4, height/4], [width/2, 3*height/4]];
+                            const nodes = [[width / 4, height / 4], [3 * width / 4, height / 4], [width / 2, 3 * height / 4]];
                             let minDist = Infinity;
                             for (const node of nodes) {
-                                const dist = Math.sqrt((x - node[0])**2 + (y - node[1])**2);
+                                const dist = Math.sqrt((x - node[0]) ** 2 + (y - node[1]) ** 2);
                                 minDist = Math.min(minDist, dist);
                             }
                             const pulse = Math.sin(time * 2 - minDist * 0.1) * 0.5 + 0.5;
@@ -3984,8 +4211,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const wave1 = Math.sin((x - width/3) * 0.1 - time * 2);
-                            const wave2 = Math.sin((x - 2*width/3) * 0.1 - time * 2.5);
+                            const wave1 = Math.sin((x - width / 3) * 0.1 - time * 2);
+                            const wave2 = Math.sin((x - 2 * width / 3) * 0.1 - time * 2.5);
                             const interference = (wave1 + wave2) / 2;
                             const intensity = (interference + 1) / 2;
                             data[index] = Math.floor(intensity * 100);
@@ -4001,7 +4228,7 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const bolt = Math.sin(x * 0.1 + Math.random() * time) * 10;
-                            const strike = Math.abs(y - height/2 - bolt) < 3 ? 1 : 0;
+                            const strike = Math.abs(y - height / 2 - bolt) < 3 ? 1 : 0;
                             const flicker = Math.random() > 0.7 ? 1 : 0;
                             data[index] = Math.floor(strike * flicker * 255);
                             data[index + 1] = Math.floor(strike * flicker * 255);
@@ -4015,8 +4242,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const dx = x - width/2;
-                            const dy = y - height/2;
+                            const dx = x - width / 2;
+                            const dy = y - height / 2;
                             const dist = Math.sqrt(dx * dx + dy * dy);
                             const angle = Math.atan2(dy, dx);
                             const spiral = Math.sin(angle * 10 + dist * 0.1 - time * 3);
@@ -4036,9 +4263,9 @@
                             const particles = 50;
                             let intensity = 0;
                             for (let i = 0; i < particles; i++) {
-                                const px = (Math.sin(time + i) * 100 + width/2);
-                                const py = (Math.cos(time * 1.2 + i) * 80 + height/2);
-                                const dist = Math.sqrt((x - px)**2 + (y - py)**2);
+                                const px = (Math.sin(time + i) * 100 + width / 2);
+                                const py = (Math.cos(time * 1.2 + i) * 80 + height / 2);
+                                const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
                                 intensity += Math.max(0, 1 - dist / 20);
                             }
                             intensity = Math.min(1, intensity / 10);
@@ -4070,7 +4297,7 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const shapes = Math.sin(x * 0.1 + time) * Math.cos(y * 0.1 + time) +
-                                          Math.sin(x * 0.05 + time * 1.5) * Math.cos(y * 0.05 + time * 1.5);
+                                Math.sin(x * 0.05 + time * 1.5) * Math.cos(y * 0.05 + time * 1.5);
                             const intensity = (shapes + 2) / 4;
                             data[index] = Math.floor(Math.sin(intensity * Math.PI + time) * 127 + 128);
                             data[index + 1] = Math.floor(Math.sin(intensity * Math.PI + time + 2) * 127 + 128);
@@ -4084,8 +4311,8 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const dx = x - width/2;
-                            const dy = y - height/2;
+                            const dx = x - width / 2;
+                            const dy = y - height / 2;
                             const dist = Math.sqrt(dx * dx + dy * dy);
                             const angle = Math.atan2(dy, dx);
                             const tunnel = Math.sin(dist * 0.05 - time * 2) + Math.sin(angle * 8 + time);
@@ -4120,14 +4347,14 @@
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
                             const sites = [
-                                [Math.sin(time) * 100 + width/2, Math.cos(time) * 80 + height/2],
-                                [Math.sin(time + 2) * 80 + width/3, Math.cos(time + 2) * 100 + height/3],
-                                [Math.sin(time + 4) * 120 + 2*width/3, Math.cos(time + 4) * 90 + 2*height/3]
+                                [Math.sin(time) * 100 + width / 2, Math.cos(time) * 80 + height / 2],
+                                [Math.sin(time + 2) * 80 + width / 3, Math.cos(time + 2) * 100 + height / 3],
+                                [Math.sin(time + 4) * 120 + 2 * width / 3, Math.cos(time + 4) * 90 + 2 * height / 3]
                             ];
                             let minDist = Infinity;
                             let closestSite = 0;
                             for (let i = 0; i < sites.length; i++) {
-                                const dist = Math.sqrt((x - sites[i][0])**2 + (y - sites[i][1])**2);
+                                const dist = Math.sqrt((x - sites[i][0]) ** 2 + (y - sites[i][1]) ** 2);
                                 if (dist < minDist) {
                                     minDist = dist;
                                     closestSite = i;
@@ -4148,8 +4375,8 @@
                             const index = (y * width + x) * 4;
                             // Simplified Perlin-like noise
                             const noise = Math.sin(x * 0.1 + time) * Math.cos(y * 0.1 + time) +
-                                         Math.sin(x * 0.05 + time * 1.2) * Math.cos(y * 0.05 + time * 1.2) * 0.5 +
-                                         Math.sin(x * 0.02 + time * 0.8) * Math.cos(y * 0.02 + time * 0.8) * 0.25;
+                                Math.sin(x * 0.05 + time * 1.2) * Math.cos(y * 0.05 + time * 1.2) * 0.5 +
+                                Math.sin(x * 0.02 + time * 0.8) * Math.cos(y * 0.02 + time * 0.8) * 0.25;
                             const intensity = (noise + 1.75) / 3.5;
                             data[index] = Math.floor(intensity * 200);
                             data[index + 1] = Math.floor(intensity * 255);
@@ -4178,12 +4405,12 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const pendulum1X = Math.sin(time) * 100 + width/2;
-                            const pendulum1Y = Math.cos(time) * 100 + height/2;
+                            const pendulum1X = Math.sin(time) * 100 + width / 2;
+                            const pendulum1Y = Math.cos(time) * 100 + height / 2;
                             const pendulum2X = Math.sin(time * 1.1 + 1) * 80 + pendulum1X;
                             const pendulum2Y = Math.cos(time * 1.1 + 1) * 80 + pendulum1Y;
-                            const dist1 = Math.sqrt((x - pendulum1X)**2 + (y - pendulum1Y)**2);
-                            const dist2 = Math.sqrt((x - pendulum2X)**2 + (y - pendulum2Y)**2);
+                            const dist1 = Math.sqrt((x - pendulum1X) ** 2 + (y - pendulum1Y) ** 2);
+                            const dist2 = Math.sqrt((x - pendulum2X) ** 2 + (y - pendulum2Y) ** 2);
                             const trail = Math.max(0, 1 - Math.min(dist1, dist2) / 30);
                             data[index] = Math.floor(trail * 255);
                             data[index + 1] = Math.floor(trail * 150);
@@ -4200,9 +4427,9 @@
                             // Simplified Lorenz-like attractor
                             const px = Math.sin(time + x * 0.01) * Math.cos(time * 1.1);
                             const py = Math.cos(time + y * 0.01) * Math.sin(time * 0.9);
-                            const attractorX = px * 50 + width/2;
-                            const attractorY = py * 50 + height/2;
-                            const dist = Math.sqrt((x - attractorX)**2 + (y - attractorY)**2);
+                            const attractorX = px * 50 + width / 2;
+                            const attractorY = py * 50 + height / 2;
+                            const dist = Math.sqrt((x - attractorX) ** 2 + (y - attractorY) ** 2);
                             const field = Math.max(0, 1 - dist / 40);
                             data[index] = Math.floor(field * 255);
                             data[index + 1] = Math.floor(field * 100);
@@ -4216,17 +4443,17 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const poles = [[width/3, height/2], [2*width/3, height/2]];
+                            const poles = [[width / 3, height / 2], [2 * width / 3, height / 2]];
                             let fieldX = 0, fieldY = 0;
                             for (let i = 0; i < poles.length; i++) {
                                 const dx = x - poles[i][0];
                                 const dy = y - poles[i][1];
-                                const dist = Math.sqrt(dx*dx + dy*dy) + 1;
+                                const dist = Math.sqrt(dx * dx + dy * dy) + 1;
                                 const force = 1000 / (dist * dist);
                                 fieldX += force * dx / dist * (i === 0 ? 1 : -1);
                                 fieldY += force * dy / dist * (i === 0 ? 1 : -1);
                             }
-                            const fieldMag = Math.sqrt(fieldX*fieldX + fieldY*fieldY);
+                            const fieldMag = Math.sqrt(fieldX * fieldX + fieldY * fieldY);
                             const intensity = Math.min(1, fieldMag / 10);
                             data[index] = Math.floor(intensity * 100);
                             data[index + 1] = Math.floor(intensity * 255);
@@ -4240,12 +4467,12 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const centerX = width/2;
-                            const centerY = height/2;
+                            const centerX = width / 2;
+                            const centerY = height / 2;
                             const dx = x - centerX;
                             const dy = y - centerY;
                             const angle = Math.atan2(dy, dx);
-                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            const dist = Math.sqrt(dx * dx + dy * dy);
                             const crystal = Math.sin(angle * 6) * Math.sin(dist * 0.1 - time);
                             const growth = Math.max(0, crystal * (1 - dist / 100));
                             data[index] = Math.floor(growth * 200);
@@ -4277,7 +4504,7 @@
                             const index = (y * width + x) * 4;
                             const arc1 = Math.sin(x * 0.1 + time * 3 + Math.sin(y * 0.1)) * 20;
                             const arc2 = Math.sin(x * 0.15 + time * 2.5 + Math.cos(y * 0.05)) * 15;
-                            const electric = Math.abs(y - height/2 - arc1) < 2 || Math.abs(y - height/3 - arc2) < 2 ? 1 : 0;
+                            const electric = Math.abs(y - height / 2 - arc1) < 2 || Math.abs(y - height / 3 - arc2) < 2 ? 1 : 0;
                             const intensity = electric * (Math.sin(time * 10) * 0.3 + 0.7);
                             data[index] = Math.floor(intensity * 255);
                             data[index + 1] = Math.floor(intensity * 255);
@@ -4291,10 +4518,10 @@
                     for (let y = 0; y < height; y++) {
                         for (let x = 0; x < width; x++) {
                             const index = (y * width + x) * 4;
-                            const centerX = width/2;
+                            const centerX = width / 2;
                             const treeY = height - 50;
                             const angle = Math.atan2(y - treeY, x - centerX);
-                            const dist = Math.sqrt((x - centerX)**2 + (y - treeY)**2);
+                            const dist = Math.sqrt((x - centerX) ** 2 + (y - treeY) ** 2);
                             const branch = Math.sin(angle * 4 + time) * Math.sin(dist * 0.1) > 0.5 ? 1 : 0;
                             const trunk = Math.abs(x - centerX) < 5 && y > treeY ? 1 : 0;
                             const tree = branch || trunk;
@@ -4378,7 +4605,7 @@
                             warpedPoints.push({
                                 x: worldPos.x,
                                 y: worldPos.y,
-                                color: `rgba(${r},${g},${b},${a/255})`,
+                                color: `rgba(${r},${g},${b},${a / 255})`,
                                 size: 2
                             });
                         }
@@ -4412,7 +4639,7 @@
                             transformedPoints.push({
                                 x: transformedPt.x,
                                 y: transformedPt.y,
-                                color: `rgba(${r},${g},${b},${a/255})`,
+                                color: `rgba(${r},${g},${b},${a / 255})`,
                                 size: 1.5
                             });
                         }
@@ -4433,7 +4660,7 @@
             video.transformedPoints.forEach(pt => {
                 if (isFinite(pt.x) && isFinite(pt.y)) {
                     const margin = pt.size || 2;
-                    if (pt.x >= -margin && pt.x <= canvasWidth + margin && 
+                    if (pt.x >= -margin && pt.x <= canvasWidth + margin &&
                         pt.y >= -margin && pt.y <= canvasHeight + margin) {
                         g.fillStyle = pt.color;
                         g.beginPath();
@@ -4819,9 +5046,6 @@
 
                                 const pos = lastMousePos[targetCanvas];
                                 addImage(img, pos.x || canvases[targetCanvas].width / 2, pos.y || canvases[targetCanvas].height / 2, targetCanvas);
-
-                                // Show a brief notification
-                                showNotification('Image pasted from clipboard!', targetCanvas);
                             };
                             img.src = e.target.result;
                         };
@@ -5090,7 +5314,6 @@
                 if (!stroke || stroke.mode !== 'etch' || !Array.isArray(stroke.pts)) {
                     stroke = { canvas: 'domain', mode: 'etch', pts: [], imagePts: [], hue: Math.random() * 360 };
                     strokes.push(stroke);
-                    if (strokes.length > MAX_STROKES) strokes.shift();
                 }
 
                 // Append new point to stroke in pixel coordinates
@@ -5148,11 +5371,21 @@
             // Recalculate image points for all strokes when function or view changes
             strokes.forEach(stroke => {
                 if (stroke.pts && stroke.pts.length > 0) {
+                    // Update original transformed points
                     stroke.imagePts = stroke.pts.map(pt => {
                         const z = toComplex(pt.x, pt.y, stroke.canvas || 'domain');
                         const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
                         return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
                     });
+
+                    // Update smoothed transformed points if they exist (for freehand strokes)
+                    if (stroke.smoothedPts && stroke.smoothedPts.length > 0) {
+                        stroke.smoothedImagePts = stroke.smoothedPts.map(pt => {
+                            const z = toComplex(pt.x, pt.y, stroke.canvas || 'domain');
+                            const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                            return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                        });
+                    }
                 }
             });
         }
@@ -5182,6 +5415,10 @@
             <div class="math">f(z) = z² = (x + yi)² = (x² - y²) + 2xyi</div>
             <p>Doubles angles and squares magnitudes. Circles centered at origin become cardioids (figure-8 shapes). Straight lines through origin become parabolas.</p>
 
+            <h3>z³, z⁴ (Higher Powers)</h3>
+            <div class="math">f(z) = z^n</div>
+            <p>Multiplies angles by n and raises magnitudes to the nth power. Creates n-fold rotational symmetry in transformations.</p>
+
             <h3>1/z (Reciprocal/Inversion)</h3>
             <div class="math">f(z) = 1/z = (x - yi)/(x² + y²)</div>
             <p>Inverts with respect to the unit circle. Points inside the unit circle map outside, and vice versa. Circles through the origin become straight lines.</p>
@@ -5201,6 +5438,14 @@
             <div class="math">f(z) = √z = √|z| · e^(i·arg(z)/2)</div>
             <p>Halves angles and takes square root of magnitudes. Two-valued function - use "Continuous inverse" toggle for smooth visualization.</p>
 
+            <h3>z̄ (Complex Conjugate)</h3>
+            <div class="math">f(z) = z̄ = x - yi</div>
+            <p>Reflects shapes across the real axis. Simple but important transformation.</p>
+
+            <h3>Möbius Transform</h3>
+            <div class="math">f(z) = (z-1)/(z+1)</div>
+            <p>Maps circles and lines to circles and lines. Preserves angles and demonstrates conformal mapping.</p>
+
             <h2>Drawing Tools</h2>
 
             <h3>Basic Tools</h3>
@@ -5210,18 +5455,37 @@
             <strong>Dot:</strong> Individual points with coordinate labels</p>
 
             <h3>Parametric Shapes</h3>
-            <p><strong>Polygon:</strong> Regular n-sided polygons<br>
-            <strong>Star:</strong> Star polygons with n points<br>
-            <strong>Spiral:</strong> Logarithmic spirals<br>
+            <p><strong>Polygon:</strong> Regular n-sided polygons (use parameter to set sides)<br>
+            <strong>Star:</strong> Star polygons with n points (use parameter)<br>
+            <strong>Spiral:</strong> Logarithmic spirals (use parameter for number of turns)<br>
             <strong>Sine Wave:</strong> Sinusoidal curves</p>
 
             <h3>Advanced Tools</h3>
             <p><strong>Integer Grid:</strong> Shows coordinate transformation - essential for understanding function behavior<br>
-            <strong>Text:</strong> Renders text that transforms mathematically. Drag corners to warp before transformation<br>
-            <strong>Image:</strong> Import images via drag-drop or clipboard (Ctrl+V). Corner manipulation allows pre-transformation warping</p>
+            <strong>Text:</strong> Add transformable text. Edit text content, font size, color, and family. Drag corners to warp before transformation<br>
+            <strong>Image:</strong> Import images via drag-drop or clipboard (Ctrl+V). Corner manipulation allows pre-transformation warping<br>
+            <strong>Video (Animation):</strong> Choose from 35 stunning animated patterns! Includes fractals, plasma effects, mathematical visualizations, and abstract art that transform in real-time</p>
+
+            <h3>Animation Gallery (35 Patterns)</h3>
+            <p><strong>Mathematical:</strong> Mandelbrot Zoom, Julia Set, Fractals, Spirals<br>
+            <strong>Natural:</strong> Fire, Water Ripples, Aurora, Lightning, Galaxy<br>
+            <strong>Scientific:</strong> Plasma Field, Neural Networks, Magnetic Fields, DNA Helix<br>
+            <strong>Abstract:</strong> Kaleidoscope, Color Tunnel, Matrix Rain, Hypnotic Spirals<br>
+            <strong>Advanced:</strong> Cellular Automata, Lorenz Attractor, Fluid Dynamics, Particle Systems</p>
 
             <h3>Etch-a-Sketch Mode</h3>
             <p>Use WASD keys or arrow buttons for step-by-step drawing. Useful for precise path construction.</p>
+
+            <h2>Special Features</h2>
+
+            <h3>Reset Button (⌂)</h3>
+            <p>Centers the coordinate system on both canvases, returning the view to the origin. Useful for returning to a standard reference frame after panning or zooming.</p>
+
+            <h3>Snap to Grid</h3>
+            <p>Enable "Snap grid" to automatically align drawings to grid intersections. Provides magnetic attraction within 20% of grid spacing for precise mathematical constructions.</p>
+
+            <h3>Theme Toggle (🌙/☀️)</h3>
+            <p>Switch between dark mode (default) and light mode for comfortable viewing in different environments.</p>
 
             <h2>Controls</h2>
 
@@ -5233,6 +5497,16 @@
 
             <h3>Navigation</h3>
             <p>Arrow buttons or WASD keys pan the view (except in Etch mode where they control drawing).</p>
+
+            <h3>Undo/Clear/Reset</h3>
+            <p><strong>Undo:</strong> Removes the most recently drawn object<br>
+            <strong>Clear:</strong> Removes all objects from both canvases<br>
+            <strong>Reset (⌂):</strong> Centers the coordinate system on both canvases</p>
+
+            <h2>Keyboard Shortcuts</h2>
+            <p><strong>Ctrl+Z:</strong> Undo last drawing<br>
+            <strong>Ctrl+V:</strong> Paste image from clipboard (when in Image mode)<br>
+            <strong>WASD or Arrow Keys:</strong> Pan view (or draw when in Etch-a-Sketch mode)</p>
 
             <h2>Usage Examples</h2>
 
@@ -5251,14 +5525,37 @@
             </div>
 
             <div class="example">
+                <h3>Creating Mathematical Art</h3>
+                <p>1. Load an animated pattern (try Mandelbrot or Plasma)<br>
+                2. Apply transformations like z² or 1/z<br>
+                3. Combine with warping by dragging corners<br>
+                4. Switch themes for optimal viewing</p>
+            </div>
+
+            <div class="example">
                 <h3>Scale-Dependent Behavior</h3>
                 <p>1. Draw identical shapes at different zoom levels<br>
                 2. Compare transformations - local vs global behavior becomes apparent<br>
                 3. Essential for understanding analytic function properties</p>
             </div>
 
+            <div class="example">
+                <h3>Interactive Demonstrations</h3>
+                <p>1. Use Text tool to add mathematical labels<br>
+                2. Load images or animations to see complex transformations<br>
+                3. Enable snap to grid for precise constructions<br>
+                4. Switch themes for optimal viewing</p>
+            </div>
+
             <h2>Mathematical Concepts</h2>
             <p>This tool demonstrates conformal mapping, complex analysis, and geometric function theory. Each transformation preserves angles locally (except at singular points) and reveals the geometric nature of complex functions.</p>
+
+            <p><strong>Key Concepts Visualized:</strong><br>
+            • Conformal mappings and angle preservation<br>
+            • Branch cuts and multi-valued functions<br>
+            • Singularities and their behavior<br>
+            • Scale-dependent mathematical behavior<br>
+            • Real-time transformation of complex patterns</p>
 
             <p>Hover over the help button for context-sensitive information about the current function and tool combination.</p>
         `;
