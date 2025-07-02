@@ -24,7 +24,9 @@
         }
 
         @media (orientation: portrait) {
-            html, body {
+
+            html,
+            body {
                 overflow-y: auto;
                 overflow-x: hidden;
                 height: auto;
@@ -66,6 +68,14 @@
 
         body.light-mode .export-btn {
             background: rgba(50, 150, 50, 0.9);
+        }
+
+        body.light-mode #exportDataBtn {
+            background: rgba(70, 130, 180, 0.9);
+        }
+
+        body.light-mode #importDataBtn {
+            background: rgba(180, 130, 70, 0.9);
         }
 
         body.light-mode .direction-btn {
@@ -189,7 +199,8 @@
                 min-width: auto !important;
                 max-width: none !important;
                 padding: 10px 20px !important;
-                order: 2; /* Place between canvases */
+                order: 2;
+                /* Place between canvases */
             }
 
             .zoom-slider {
@@ -207,11 +218,13 @@
             }
 
             .canvas-container:first-of-type {
-                order: 1; /* Domain canvas on top */
+                order: 1;
+                /* Domain canvas on top */
             }
 
             .canvas-container:last-of-type {
-                order: 3; /* Codomain canvas on bottom */
+                order: 3;
+                /* Codomain canvas on bottom */
             }
         }
 
@@ -446,7 +459,6 @@
         .export-btn {
             position: fixed;
             bottom: 15px;
-            left: 65px;
             width: 40px;
             height: 40px;
             background: rgba(50, 150, 50, 0.9);
@@ -462,9 +474,39 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* Position PNG export button */
+        #exportBtn {
+            left: 65px;
+        }
+
+        /* Position DAT export button */
+        #exportDataBtn {
+            left: 115px;
+            background: rgba(70, 130, 180, 0.9);
+            /* Different color for DAT export */
+        }
+
+        /* Position DAT import button */
+        #importDataBtn {
+            left: 165px;
+            background: rgba(180, 130, 70, 0.9);
+            /* Different color for DAT import */
+        }
+
         .export-btn:hover {
-            background: rgba(50, 150, 50, 1);
             transform: scale(1.1);
+        }
+
+        #exportBtn:hover {
+            background: rgba(50, 150, 50, 1);
+        }
+
+        #exportDataBtn:hover {
+            background: rgba(70, 130, 180, 1);
+        }
+
+        #importDataBtn:hover {
+            background: rgba(180, 130, 70, 1);
         }
 
         .help-btn:hover {
@@ -708,6 +750,10 @@
         <!-- Single Help Button -->
         <button class="help-btn" id="helpBtn">?</button>
         <button class="export-btn" id="exportBtn">⬇</button>
+        <button class="export-btn" id="exportDataBtn" title="Export canvas state as .DAT file">💾</button>
+        <button class="export-btn" id="importDataBtn"
+            title="Import canvas state from .DAT file (adds to current scene)">📁</button>
+        <input type="file" id="importFileInput" accept=".dat,.json" style="display: none;" />
         <div id="hoverTooltip" class="hover-tooltip"></div>
 
         <div id="tooltip" class="tooltip" style="display:none;"></div>
@@ -753,6 +799,20 @@
     <script>
         const canvases = { domain: document.getElementById('canvasDomain'), codomain: document.getElementById('canvasCodomain') };
         const ctx = { domain: canvases.domain.getContext('2d'), codomain: canvases.codomain.getContext('2d') };
+
+        // Configure contexts for crisp rendering and reduced jaggies
+        Object.values(ctx).forEach(context => {
+            // Enable better anti-aliasing and smoothing
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+
+            // Set better line rendering properties
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+
+            // Enable high-quality text rendering
+            context.textRenderingOptimization = 'optimizeQuality';
+        });
         const functionSelect = document.getElementById('functionSelect');
         const toolSelect = document.getElementById('toolSelect');
         const paramLabel = document.getElementById('paramLabel');
@@ -958,6 +1018,13 @@
         let origin = {}, baseScale = 40, scale = baseScale;
         let isDrawing = false, startPt = null, currentPts = [], activeCanvas = 'domain';
         const strokes = [], dots = [], texts = [], images = [], videos = [];
+
+        // Line tool Bezier editing state
+        let isEditingBezier = false;
+        let editingStrokeIndex = -1;
+        let selectedControlPoint = -1;
+        let bezierControlPoints = [];
+        let isDraggingControlPoint = false;
 
         // Snap to grid state
         let snapToGrid = true;
@@ -1187,7 +1254,12 @@
         }
 
         function toComplex(x, y, key) { return { re: (x - origin[key].x) / scale, im: (origin[key].y - y) / scale }; }
-        function toCanvas(z, key) { return { x: origin[key].x + z.re * scale, y: origin[key].y - z.im * scale }; }
+        function toCanvas(z, key) {
+            // Simple coordinate transformation for precise positioning
+            const x = origin[key].x + z.re * scale;
+            const y = origin[key].y - z.im * scale;
+            return { x, y };
+        }
 
         // Snap to grid function - magnetic snap within 20% range of grid spacing
         function snapToGridPoint(x, y, key) {
@@ -1326,11 +1398,11 @@
                 const zoomSliderHeight = 60;
                 const padding = 40; // Total padding for gaps and margins
                 const usableHeight = availableHeight - zoomSliderHeight - padding;
-                
+
                 // Calculate size to fit two square canvases vertically
                 const maxSizeByHeight = Math.floor(usableHeight / 2);
                 const maxSizeByWidth = Math.floor(availableWidth - 20); // Account for side margins
-                
+
                 canvasSize = Math.min(maxSizeByHeight, maxSizeByWidth);
                 canvasSize = Math.max(canvasSize, 150); // Minimum size
             } else {
@@ -1338,11 +1410,11 @@
                 const zoomSliderWidth = 80;
                 const padding = 40; // Total padding for gaps and margins
                 const usableWidth = availableWidth - zoomSliderWidth - padding;
-                
+
                 // Calculate size to fit two square canvases horizontally
                 const maxSizeByWidth = Math.floor(usableWidth / 2);
                 const maxSizeByHeight = Math.floor(availableHeight - 30); // Account for top/bottom margins
-                
+
                 canvasSize = Math.min(maxSizeByWidth, maxSizeByHeight);
                 canvasSize = Math.max(canvasSize, 150); // Minimum size
             }
@@ -1444,12 +1516,12 @@
             ];
         }
         window.addEventListener('resize', resize);
-        
+
         // Listen for visual viewport changes (mobile browser UI changes)
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', resize);
         }
-        
+
         // This was triggering resize on every tiny device movement, causing pan to reset
         // zoom slider listener with debounced transformation updates
         const zoomSlider = document.getElementById('zoomSlider');
@@ -1806,14 +1878,41 @@
                     g.strokeStyle = baseColor;
                     g.lineWidth = 2;
 
-                    // Optimize stroke drawing during zoom operations
-                    if (window.isZooming && pts.length > 20) {
-                        // During zoom, simplify complex strokes by sampling every nth point
-                        const simplifiedPts = pts.filter((_, idx) => idx % 2 === 0);
-                        drawShape(g, simplifiedPts, s.mode);
+                    // For lines with Bezier control points, regenerate curve if needed
+                    if (s.mode === 'line' && s.controlPoints && s.isBezier) {
+                        if (key === s.canvas) {
+                            // Original canvas - use control points to generate curve
+                            const bezierPts = generateBezierCurve(s.controlPoints);
+
+                            // Optimize stroke drawing during zoom operations
+                            if (window.isZooming && bezierPts.length > 20) {
+                                const simplifiedPts = bezierPts.filter((_, idx) => idx % 2 === 0);
+                                drawShape(g, simplifiedPts, s.mode);
+                            } else {
+                                drawShape(g, bezierPts, s.mode);
+                            }
+                        } else {
+                            // Transformed canvas - use pre-computed smoothed image points
+                            const transformedPts = s.smoothedImagePts || pts;
+
+                            // Optimize stroke drawing during zoom operations
+                            if (window.isZooming && transformedPts.length > 20) {
+                                const simplifiedPts = transformedPts.filter((_, idx) => idx % 2 === 0);
+                                drawShape(g, simplifiedPts, s.mode);
+                            } else {
+                                drawShape(g, transformedPts, s.mode);
+                            }
+                        }
                     } else {
-                        // Normal drawing with all points
-                        drawShape(g, pts, s.mode);
+                        // Optimize stroke drawing during zoom operations
+                        if (window.isZooming && pts.length > 20) {
+                            // During zoom, simplify complex strokes by sampling every nth point
+                            const simplifiedPts = pts.filter((_, idx) => idx % 2 === 0);
+                            drawShape(g, simplifiedPts, s.mode);
+                        } else {
+                            // Normal drawing with all points
+                            drawShape(g, pts, s.mode);
+                        }
                     }
                 });
             });
@@ -2064,6 +2163,45 @@
 
             // Update iframe positions for videos
             updateVideoIframePositions();
+
+            // Draw Bezier control points when editing line
+            if (isEditingBezier && editingStrokeIndex !== -1 && toolSelect.value === 'line') {
+                const stroke = strokes[editingStrokeIndex];
+                if (stroke && stroke.controlPoints && stroke.canvas === activeCanvas) {
+                    const g = ctx[activeCanvas];
+
+                    // Draw control point handles
+                    stroke.controlPoints.forEach((point, index) => {
+                        // Draw connecting lines between control points
+                        if (index > 0) {
+                            g.strokeStyle = isDarkMode ? '#666' : '#ccc';
+                            g.lineWidth = 1;
+                            g.setLineDash([5, 5]);
+                            g.beginPath();
+                            g.moveTo(stroke.controlPoints[index - 1].x, stroke.controlPoints[index - 1].y);
+                            g.lineTo(point.x, point.y);
+                            g.stroke();
+                            g.setLineDash([]);
+                        }
+
+                        // Draw control points
+                        g.fillStyle = index === selectedControlPoint ? '#ff3333' : '#00aa00';
+                        g.strokeStyle = '#ffffff';
+                        g.lineWidth = 2;
+                        g.beginPath();
+                        g.arc(point.x, point.y, 6, 0, 2 * Math.PI);
+                        g.fill();
+                        g.stroke();
+
+                        // Add index label for control points
+                        g.fillStyle = isDarkMode ? '#ffffff' : '#000000';
+                        g.font = '12px Arial';
+                        g.textAlign = 'center';
+                        g.textBaseline = 'middle';
+                        g.fillText(index.toString(), point.x, point.y + 15);
+                    });
+                }
+            }
         }
 
         function drawShape(g, pts, mode) {
@@ -2102,41 +2240,123 @@
                 return;
             }
 
-            // For 4+ points, use cubic Bezier curves for maximum smoothness
+            // For 4+ points, use cubic Bezier curves with enhanced smoothness
             for (let i = 0; i < pts.length - 1; i++) {
                 const current = pts[i];
                 const next = pts[i + 1];
 
                 if (i === 0) {
-                    // First segment
-                    const cp1x = current.x + (next.x - current.x) * 0.3;
-                    const cp1y = current.y + (next.y - current.y) * 0.3;
-                    const cp2x = next.x - (pts[i + 2] ? (pts[i + 2].x - current.x) * 0.2 : (next.x - current.x) * 0.3);
-                    const cp2y = next.y - (pts[i + 2] ? (pts[i + 2].y - current.y) * 0.2 : (next.y - current.y) * 0.3);
+                    // First segment - create smooth entry
+                    const cp1x = current.x + (next.x - current.x) * 0.25;
+                    const cp1y = current.y + (next.y - current.y) * 0.25;
+                    const cp2x = next.x - (pts[i + 2] ? (pts[i + 2].x - current.x) * 0.15 : (next.x - current.x) * 0.25);
+                    const cp2y = next.y - (pts[i + 2] ? (pts[i + 2].y - current.y) * 0.15 : (next.y - current.y) * 0.25);
 
                     g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
                 } else if (i === pts.length - 2) {
-                    // Last segment
+                    // Last segment - create smooth exit
                     const prev = pts[i - 1];
-                    const cp1x = current.x + (next.x - prev.x) * 0.2;
-                    const cp1y = current.y + (next.y - prev.y) * 0.2;
-                    const cp2x = next.x - (next.x - current.x) * 0.3;
-                    const cp2y = next.y - (next.y - current.y) * 0.3;
+                    const cp1x = current.x + (next.x - prev.x) * 0.15;
+                    const cp1y = current.y + (next.y - prev.y) * 0.15;
+                    const cp2x = next.x - (next.x - current.x) * 0.25;
+                    const cp2y = next.y - (next.y - current.y) * 0.25;
 
                     g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
                 } else {
-                    // Middle segments
+                    // Middle segments - maximum smoothness
                     const prev = pts[i - 1];
                     const next2 = pts[i + 2];
 
-                    const cp1x = current.x + (next.x - prev.x) * 0.2;
-                    const cp1y = current.y + (next.y - prev.y) * 0.2;
-                    const cp2x = next.x - (next2.x - current.x) * 0.2;
-                    const cp2y = next.y - (next2.y - current.y) * 0.2;
+                    const cp1x = current.x + (next.x - prev.x) * 0.15;
+                    const cp1y = current.y + (next.y - prev.y) * 0.15;
+                    const cp2x = next.x - (next2.x - current.x) * 0.15;
+                    const cp2y = next.y - (next2.y - current.y) * 0.15;
 
                     g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
                 }
             }
+        }
+
+        // Bezier curve generation and editing functions for enhanced line tool
+        function generateBezierCurve(controlPoints, segments = 50) {
+            if (controlPoints.length < 2) return [];
+            if (controlPoints.length === 2) {
+                // Linear interpolation for 2 points
+                const pts = [];
+                for (let t = 0; t <= 1; t += 1 / segments) {
+                    const x = controlPoints[0].x + (controlPoints[1].x - controlPoints[0].x) * t;
+                    const y = controlPoints[0].y + (controlPoints[1].y - controlPoints[0].y) * t;
+                    pts.push({ x, y });
+                }
+                return pts;
+            }
+
+            // Multi-point Bezier curve using De Casteljau's algorithm
+            const pts = [];
+            for (let t = 0; t <= 1; t += 1 / segments) {
+                const point = deCasteljau(controlPoints, t);
+                pts.push({ x: point.x, y: point.y });
+            }
+            return pts;
+        }
+
+        function deCasteljau(points, t) {
+            if (points.length === 1) return points[0];
+
+            const newPoints = [];
+            for (let i = 0; i < points.length - 1; i++) {
+                const x = (1 - t) * points[i].x + t * points[i + 1].x;
+                const y = (1 - t) * points[i].y + t * points[i + 1].y;
+                newPoints.push({ x, y });
+            }
+            return deCasteljau(newPoints, t);
+        }
+
+        function findNearestControlPoint(x, y, controlPoints, tolerance = 15) {
+            let nearest = -1;
+            let minDist = tolerance;
+
+            for (let i = 0; i < controlPoints.length; i++) {
+                const dist = Math.hypot(x - controlPoints[i].x, y - controlPoints[i].y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = i;
+                }
+            }
+            return nearest;
+        }
+
+        function findNearestBezierLine(x, y, strokeIndex, tolerance = 10) {
+            const stroke = strokes[strokeIndex];
+            if (!stroke || stroke.mode !== 'line' || !stroke.controlPoints) return -1;
+
+            const controlPoints = stroke.controlPoints;
+
+            // Check if click is near a line segment between control points
+            for (let i = 0; i < controlPoints.length - 1; i++) {
+                const p1 = controlPoints[i];
+                const p2 = controlPoints[i + 1];
+
+                const dist = distanceToLineSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                if (dist < tolerance) {
+                    return i; // Return the index where new point should be inserted (after i)
+                }
+            }
+            return -1;
+        }
+
+        function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.hypot(dx, dy);
+
+            if (length === 0) return Math.hypot(px - x1, py - y1);
+
+            const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (length * length)));
+            const projX = x1 + t * dx;
+            const projY = y1 + t * dy;
+
+            return Math.hypot(px - projX, py - projY);
         }
 
         // Point smoothing and filtering for freehand drawing
@@ -2229,9 +2449,8 @@
 
             switch (tool) {
                 case 'line':
-                    for (let t = 0; t <= 1; t += 0.01) {
-                        pts.push({ x: startPt.x + dx * t, y: startPt.y + dy * t });
-                    }
+                    // For lines, return minimal points - Bezier logic will handle the curve generation
+                    pts.push(startPt, endPt);
                     break;
                 case 'circle': {
                     const cx = (startPt.x + endPt.x) / 2, cy = (startPt.y + endPt.y) / 2, r = Math.hypot(dx, dy) / 2;
@@ -2438,6 +2657,75 @@
                 return;
             }
 
+            // Handle Bezier control point editing for line tool
+            if (toolSelect.value === 'line') {
+                let hitSomething = false;
+
+                // Check if clicking on an existing control point
+                for (let i = 0; i < strokes.length; i++) {
+                    const stroke = strokes[i];
+                    if (stroke.mode === 'line' && stroke.controlPoints && stroke.canvas === activeCanvas) {
+                        for (let j = 0; j < stroke.controlPoints.length; j++) {
+                            const cp = stroke.controlPoints[j];
+                            const dist = Math.hypot(p.x - cp.x, p.y - cp.y);
+                            if (dist <= 10) { // Within 10 pixels of control point
+                                isEditingBezier = true;
+                                editingStrokeIndex = i;
+                                selectedControlPoint = j;
+                                isDraggingControlPoint = true;
+                                hitSomething = true;
+                                redrawAll();
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Check if clicking on an existing line to add a control point
+                for (let i = 0; i < strokes.length; i++) {
+                    const stroke = strokes[i];
+                    if (stroke.mode === 'line' && stroke.controlPoints && stroke.canvas === activeCanvas) {
+                        // Generate current curve points for hit testing
+                        const curvePoints = generateBezierCurve(stroke.controlPoints);
+
+                        // Check if click is near the curve
+                        for (let k = 0; k < curvePoints.length - 1; k++) {
+                            const lineStart = curvePoints[k];
+                            const lineEnd = curvePoints[k + 1];
+                            const distToLine = distanceToLineSegment(p.x, p.y, lineStart.x, lineStart.y, lineEnd.x, lineEnd.y);
+
+                            if (distToLine <= 8) { // Within 8 pixels of the curve
+                                // Add a new control point at the clicked location
+                                const insertIndex = Math.ceil(stroke.controlPoints.length / 2);
+                                stroke.controlPoints.splice(insertIndex, 0, { x: p.x, y: p.y });
+
+                                // Regenerate the curve with the new control point
+                                stroke.smoothedPts = generateBezierCurve(stroke.controlPoints);
+                                stroke.smoothedImagePts = stroke.smoothedPts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
+
+                                isEditingBezier = true;
+                                editingStrokeIndex = i;
+                                selectedControlPoint = insertIndex;
+                                isDraggingControlPoint = true;
+                                hitSomething = true;
+                                redrawAll();
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // If currently in Bezier editing mode and clicked away from any line/control point, exit editing mode
+                if (isEditingBezier && !hitSomething) {
+                    isEditingBezier = false;
+                    editingStrokeIndex = -1;
+                    selectedControlPoint = -1;
+                    isDraggingControlPoint = false;
+                    redrawAll();
+                    // Continue to draw a new line
+                }
+            }
+
             isDrawing = true;
             hasDrawnSinceMouseDown = true; // Mark that we've started drawing
             startPt = p;
@@ -2463,6 +2751,23 @@
                     // Not drawing, check for hover snap
                     p = checkMagneticSnap(p.x, p.y, activeCanvas, true, false);
                 }
+            }
+
+            // Handle Bezier control point dragging
+            if (isDraggingControlPoint && isEditingBezier && editingStrokeIndex !== -1 && selectedControlPoint !== -1) {
+                evt.preventDefault();
+                const stroke = strokes[editingStrokeIndex];
+                if (stroke && stroke.controlPoints && selectedControlPoint < stroke.controlPoints.length) {
+                    // Update the control point position
+                    stroke.controlPoints[selectedControlPoint] = { x: p.x, y: p.y };
+
+                    // Regenerate the Bezier curve
+                    stroke.smoothedPts = generateBezierCurve(stroke.controlPoints);
+                    stroke.smoothedImagePts = stroke.smoothedPts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
+
+                    redrawAll();
+                }
+                return;
             }
 
             // Handle text corner dragging with different modes
@@ -2736,6 +3041,13 @@
                 clickSnapTimeout = null;
             }
 
+            // Handle Bezier control point dragging end
+            if (isDraggingControlPoint) {
+                isDraggingControlPoint = false;
+                // Keep editing mode active for further control point adjustments
+                return;
+            }
+
             // Handle text corner dragging end
             if (isDraggingTextCorner) {
                 isDraggingTextCorner = false;
@@ -2799,20 +3111,28 @@
             isDrawing = false;
             const tool = toolSelect.value;
             if (tool === 'dot' || tool === 'chessboard') return;
-            const ePt = getPos(evt, activeCanvas);
+            let ePt = getPos(evt, activeCanvas);
+
+            // Apply enhanced magnetic snap to end point for drawing operations
+            if (snapToGrid && ['line', 'circle', 'polygon', 'dot', 'star', 'freehand'].includes(tool)) {
+                ePt = checkMagneticSnap(ePt.x, ePt.y, activeCanvas, false, false);
+            }
 
             // Get the original points (preserve raw input)
             let pts = tool === 'freehand' ? currentPts : computePts(tool, startPt, ePt);
 
-            // Create smoothed points for all curved shapes
+            // Create smoothed points for all curved shapes with enhanced smoothing
             let smoothedPts = pts;
             if (tool === 'freehand' && pts.length > 2) {
-                if (pts.length > 10) {
-                    // For longer strokes, use advanced Catmull-Rom smoothing for display
+                if (pts.length > 8) {
+                    // For longer strokes, use advanced Catmull-Rom smoothing with more segments for ultra-smooth curves
+                    smoothedPts = catmullRomSmooth(pts, 6);
+                } else if (pts.length > 4) {
+                    // For medium strokes, use Catmull-Rom with fewer segments
                     smoothedPts = catmullRomSmooth(pts, 4);
                 } else {
-                    // For shorter strokes, use simpler smoothing for display
-                    smoothedPts = smoothPoints(pts, 1.5);
+                    // For shorter strokes, use point smoothing
+                    smoothedPts = smoothPoints(pts, 1);
                 }
             } else if (['circle', 'spiral', 'sine', 'star', 'polygon'].includes(tool) && pts.length > 3) {
                 // Apply light smoothing to geometric shapes for better rendering
@@ -2823,7 +3143,7 @@
             const smoothedImg = smoothedPts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
 
             // Store both original and smoothed points
-            strokes.push({
+            const stroke = {
                 canvas: activeCanvas,
                 mode: tool,
                 pts: pts,  // Original points for mathematical accuracy
@@ -2831,7 +3151,18 @@
                 smoothedPts: smoothedPts,  // Smoothed points for rendering
                 smoothedImagePts: smoothedImg,  // Smoothed transformed points
                 hue: Math.random() * 360
-            });
+            };
+
+            // For line tool, always use Bezier control points for future editing
+            if (tool === 'line') {
+                stroke.controlPoints = [startPt, ePt]; // Start with simple two-point Bezier
+                stroke.isBezier = true; // Always use Bezier for lines
+                // Generate Bezier curve points for rendering
+                stroke.smoothedPts = generateBezierCurve([startPt, ePt]);
+                stroke.smoothedImagePts = stroke.smoothedPts.map(pt => toCanvas(activeCanvas === 'domain' ? userFn(toComplex(pt.x, pt.y, activeCanvas)) : invFn(toComplex(pt.x, pt.y, activeCanvas)), activeCanvas === 'domain' ? 'codomain' : 'domain'));
+            }
+
+            strokes.push(stroke);
             redrawAll();
         }
         function getPos(evt, key) {
@@ -3367,6 +3698,17 @@
 
         // Track modifier keys for different drag modes
         window.addEventListener('keydown', (evt) => {
+            // Handle Escape key to exit Bezier editing mode
+            if (evt.key === 'Escape' && isEditingBezier) {
+                evt.preventDefault();
+                isEditingBezier = false;
+                editingStrokeIndex = -1;
+                selectedControlPoint = -1;
+                isDraggingControlPoint = false;
+                redrawAll();
+                return;
+            }
+
             // Handle Ctrl+Z for undo
             if (evt.ctrlKey && evt.key === 'z') {
                 evt.preventDefault(); // Prevent browser default undo
@@ -5513,7 +5855,7 @@
 
             <h3>Basic Tools</h3>
             <p><strong>Freehand:</strong> Draw arbitrary curves<br>
-            <strong>Line:</strong> Straight line segments<br>
+            <strong>Line (Bezier):</strong> Professional curve editing - Draw a line, then click on it to add control points. Drag control points to create smooth Bezier curves. Press Escape to exit editing mode.<br>
             <strong>Circle:</strong> Perfect circles<br>
             <strong>Dot:</strong> Individual points with coordinate labels</p>
 
@@ -5538,6 +5880,17 @@
 
             <h3>Etch-a-Sketch Mode</h3>
             <p>Use WASD keys or arrow buttons for step-by-step drawing. Useful for precise path construction.</p>
+
+            <h3>Bezier Curve Editing (Line Tool)</h3>
+            <p>The Line tool offers professional-grade Bezier curve editing:</p>
+            <p><strong>Basic Line Drawing:</strong> Click and drag to create a simple line (automatically becomes a 2-point Bezier curve)<br>
+            <strong>Adding Control Points:</strong> Click anywhere on an existing line to add a new control point at that location<br>
+            <strong>Editing Control Points:</strong> Click and drag any control point to reshape the curve smoothly<br>
+            <strong>Visual Feedback:</strong> Control points appear as colored circles with connecting dashed lines when editing<br>
+            <strong>Exit Editing:</strong> Press Escape or click away from any line to exit Bezier editing mode<br>
+            <strong>Magnetic Snapping:</strong> With "Snap grid" enabled, line endpoints and control points snap to grid intersections for precise placement</p>
+            
+            <p><em>Note:</em> Bezier curves are preserved during export/import, allowing you to save and reload complex curve designs.</p>
 
             <h2>Special Features</h2>
 
@@ -5757,7 +6110,7 @@
                     toolInfo = "<strong>Circle Tool:</strong> Perfect circles";
                     break;
                 case 'line':
-                    toolInfo = "<strong>Line Tool:</strong> Straight lines";
+                    toolInfo = "<strong>Line Tool (Bezier):</strong> Draw lines → Click on line to add control points → Drag control points for smooth curves → Press Escape to exit editing";
                     break;
                 case 'dot':
                     toolInfo = "<strong>Dot Tool:</strong> Points with coordinates";
@@ -5781,12 +6134,25 @@
 
         // Export functionality
         const exportBtn = document.getElementById('exportBtn');
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        const importDataBtn = document.getElementById('importDataBtn');
+        const importFileInput = document.getElementById('importFileInput');
 
         exportBtn.addEventListener('click', () => {
             // Export both canvases using current theme
             exportCanvas('domain');
             setTimeout(() => exportCanvas('codomain'), 100); // Small delay to avoid conflicts
         });
+
+        // .DAT export functionality
+        exportDataBtn.addEventListener('click', () => {
+            exportCanvasData();
+        });
+
+        // .DAT import functionality
+        importDataBtn.addEventListener('click', () => {
+            importFileInput.click();
+        }); importFileInput.addEventListener('change', importCanvasData);
 
         // Export function that uses current theme
         function exportCanvas(canvasKey) {
@@ -5810,6 +6176,957 @@
             link.download = `complex-visualizer-${canvasKey}-${themeName}-${new Date().getTime()}.png`;
             link.href = tempCanvas.toDataURL('image/png');
             link.click();
+        }
+
+        // Function to serialize canvas state to JSON
+        function serializeCanvasState() {
+            // Create a serializable copy of the current state
+            const state = {
+                version: "1.0",
+                timestamp: new Date().toISOString(),
+                settings: {
+                    functionSelect: functionSelect.value,
+                    toolSelect: toolSelect.value,
+                    paramValue: paramInput.value,
+                    snapToGrid: snapToGrid,
+                    continuousInverse: continuousToggle.checked,
+                    isDarkMode: isDarkMode,
+                    scale: scale,
+                    baseScale: baseScale,
+                    origin: origin
+                },
+                objects: {
+                    strokes: serializeStrokes(),
+                    dots: serializeDots(),
+                    texts: serializeTexts(),
+                    images: serializeImages(),
+                    videos: serializeVideos(),
+                    chessboard: serializeChessboard()
+                }
+            };
+
+            return state;
+        }
+
+        // Serialize strokes (freehand, lines, circles, etc.)
+        function serializeStrokes() {
+            console.log(`serializeStrokes called - found ${strokes.length} strokes in array`);
+            console.log('Strokes array reference:', strokes);
+
+            return strokes.map(stroke => {
+                const baseStroke = {
+                    canvas: stroke.canvas || 'domain',
+                    mode: stroke.mode || 'freehand',
+                    hue: stroke.hue || 0,
+                    paramValue: stroke.paramValue || null
+                };
+
+                // For geometric shapes, store minimal data
+                switch (stroke.mode) {
+                    case 'circle':
+                        return {
+                            ...baseStroke,
+                            center: stroke.center || null,
+                            radius: stroke.radius || null,
+                            // For circles, store all available information
+                            startPoint: stroke.pts && stroke.pts.length > 0 ? stroke.pts[0] : null,
+                            endPoint: stroke.pts && stroke.pts.length > 1 ? stroke.pts[stroke.pts.length - 1] : null,
+                            pts: stroke.pts || [],
+                            imagePts: stroke.imagePts || []
+                        };
+
+                    case 'line':
+                        return {
+                            ...baseStroke,
+                            // For lines, store start and end points AND Bezier control points if available
+                            startPoint: stroke.pts && stroke.pts.length > 0 ? stroke.pts[0] : null,
+                            endPoint: stroke.pts && stroke.pts.length > 1 ? stroke.pts[stroke.pts.length - 1] : null,
+                            // NEW: Store Bezier control points and state
+                            controlPoints: stroke.controlPoints || null,
+                            isBezier: stroke.isBezier || false
+                        };
+
+                    case 'polygon':
+                    case 'star':
+                        return {
+                            ...baseStroke,
+                            // For polygons/stars, store center and one corner point + param
+                            center: stroke.center || null,
+                            cornerPoint: stroke.pts && stroke.pts.length > 0 ? stroke.pts[0] : null,
+                            paramValue: stroke.paramValue || 5
+                        };
+
+                    case 'spiral':
+                    case 'sine':
+                        return {
+                            ...baseStroke,
+                            // For parametric curves, store start, end, and parameters
+                            startPoint: stroke.pts && stroke.pts.length > 0 ? stroke.pts[0] : null,
+                            endPoint: stroke.pts && stroke.pts.length > 1 ? stroke.pts[stroke.pts.length - 1] : null,
+                            paramValue: stroke.paramValue || 5
+                        };
+
+                    case 'freehand':
+                    case 'etch':
+                    default:
+                        // For freehand, we need to keep all points (but simplified)
+                        return {
+                            ...baseStroke,
+                            pts: stroke.pts || [],
+                            imagePts: stroke.imagePts || [],
+                            // Don't save smoothed points - recalculate on load
+                            smoothedPts: null,
+                            smoothedImagePts: null
+                        };
+                }
+            });
+        }
+
+        // Serialize dots
+        function serializeDots() {
+            console.log(`serializeDots called - found ${dots.length} dots in array`);
+            return dots.map(dot => ({
+                canvas: dot.canvas || 'domain',
+                z: dot.z || { re: 0, im: 0 },
+                w: dot.w || { re: 0, im: 0 }
+            }));
+        }
+
+        // Serialize texts
+        function serializeTexts() {
+            return texts.map(text => ({
+                text: text.text || '',
+                canvas: text.canvas || 'domain',
+                x: text.x || 0,
+                y: text.y || 0,
+                width: text.width || 100,
+                height: text.height || 50,
+                fontSize: text.fontSize || 24,
+                color: text.color || '#ffffff',
+                fontFamily: text.fontFamily || 'Arial',
+                corners: text.corners || [],
+                transformedPoints: null, // Don't save transformed points - recalculate on load
+                warpedPoints: null
+            }));
+        }
+
+        // Serialize images (save as base64 data URLs)
+        function serializeImages() {
+            return images.map(img => {
+                let dataURL = '';
+
+                try {
+                    // Convert image to base64 for storage
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.element.width || img.originalWidth || 100;
+                    canvas.height = img.element.height || img.originalHeight || 100;
+                    ctx.drawImage(img.element, 0, 0);
+                    dataURL = canvas.toDataURL();
+                } catch (error) {
+                    console.warn('Failed to serialize image to base64:', error);
+                    dataURL = ''; // Fallback to empty string
+                }
+
+                return {
+                    dataURL: dataURL,
+                    canvas: img.canvas || 'domain',
+                    x: img.x || 0,
+                    y: img.y || 0,
+                    width: img.width || 100,
+                    height: img.height || 100,
+                    originalWidth: img.originalWidth || 100,
+                    originalHeight: img.originalHeight || 100,
+                    scaleFactor: img.scaleFactor || 1,
+                    corners: img.corners || [],
+                    transformedPoints: null, // Don't save transformed points - recalculate on load
+                    warpedPoints: null
+                };
+            });
+        }
+
+        // Serialize videos/animations
+        function serializeVideos() {
+            return videos.map(video => ({
+                animationType: video.animationType || 'rainbow_waves',
+                canvas: video.canvas || 'domain',
+                x: video.x || 0,
+                y: video.y || 0,
+                width: video.width || 100,
+                height: video.height || 100,
+                corners: video.corners || [],
+                animationTime: video.animationTime || 0,
+                isPlaying: video.element ? video.element.isPlaying : false,
+                transformedPoints: null, // Don't save transformed points - recalculate on load
+                warpedPoints: null
+            }));
+        }
+
+        // Serialize chessboard/grid
+        function serializeChessboard() {
+            if (!chessboard) return null;
+
+            return {
+                corners: chessboard.corners || [],
+                gridSize: chessboard.gridSize || 10,
+                center: chessboard.center || { x: 0, y: 0 },
+                isVisible: true
+            };
+        }
+
+        // Export canvas data as .DAT file
+        function exportCanvasData() {
+            try {
+                console.log('=== EXPORT DEBUG START ===');
+                console.log('Starting canvas data export...');
+                console.log(`Current scene state - strokes: ${strokes.length}, dots: ${dots.length}, texts: ${texts.length}, images: ${images.length}, videos: ${videos.length}, chessboard: ${chessboard ? 'exists' : 'none'}`);
+
+                // Check if arrays are the actual global arrays
+                console.log('Array references check:');
+                console.log('strokes array:', strokes);
+                console.log('dots array:', dots);
+                console.log('texts array:', texts);
+                console.log('images array:', images);
+                console.log('videos array:', videos);
+
+                // Log detailed info about what we're exporting
+                console.log('Strokes to export:', strokes.map(s => ({ mode: s.mode, canvas: s.canvas, points: s.pts?.length || 0 })));
+                console.log('Dots to export:', dots.map(d => ({ canvas: d.canvas, z: d.z, w: d.w })));
+                console.log('Texts to export:', texts.map(t => ({ text: t.text, canvas: t.canvas })));
+                console.log('Images to export:', images.map(i => ({ canvas: i.canvas, width: i.width, height: i.height })));
+                console.log('Videos to export:', videos.map(v => ({ animationType: v.animationType, canvas: v.canvas })));
+
+                const state = serializeCanvasState();
+                console.log('Canvas state serialized successfully');
+                console.log('Serialized objects count:', {
+                    strokes: state.objects.strokes.length,
+                    dots: state.objects.dots.length,
+                    texts: state.objects.texts.length,
+                    images: state.objects.images.length,
+                    videos: state.objects.videos.length,
+                    chessboard: state.objects.chessboard ? 'exists' : 'none'
+                });
+
+                // Double-check each serialization function individually
+                console.log('Direct serialization check:');
+                console.log('serializeStrokes() result:', serializeStrokes().length);
+                console.log('serializeDots() result:', serializeDots().length);
+                console.log('serializeTexts() result:', serializeTexts().length);
+                console.log('serializeImages() result:', serializeImages().length);
+                console.log('serializeVideos() result:', serializeVideos().length);
+
+                const jsonString = JSON.stringify(state, null, 2);
+                console.log('JSON string created successfully');
+                console.log('JSON first 500 chars:', jsonString.substring(0, 500));
+                console.log('=== EXPORT DEBUG END ===');
+
+                // Create blob and download
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `complex-visualizer-${new Date().getTime()}.dat`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Clean up
+                URL.revokeObjectURL(url);
+
+                console.log('Canvas data export completed successfully');
+                // Show success notification
+                const totalObjects = state.objects.strokes.length + state.objects.dots.length +
+                    state.objects.texts.length + state.objects.images.length +
+                    state.objects.videos.length + (state.objects.chessboard ? 1 : 0);
+                showNotification(`Canvas state exported successfully! ${totalObjects} objects saved.`, 'domain');
+
+            } catch (error) {
+                console.error('Error exporting canvas data:', error);
+                console.error('Error stack:', error.stack);
+                showNotification(`Error exporting canvas data: ${error.message}`, 'domain');
+            }
+        }
+
+        // Import canvas data from .DAT file
+        function importCanvasData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Reset the file input so the same file can be imported again
+            event.target.value = '';
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    console.log('Starting canvas data import...');
+                    const jsonData = JSON.parse(e.target.result);
+                    console.log('JSON data parsed successfully');
+
+                    // Validate the data structure
+                    if (!jsonData.objects) {
+                        throw new Error('Invalid file format: missing objects data');
+                    }
+
+                    // Validate that essential functions are available
+                    if (typeof userFn !== 'function') {
+                        throw new Error('userFn function not available - cannot import with transformations');
+                    }
+                    if (typeof toComplex !== 'function' || typeof toCanvas !== 'function') {
+                        throw new Error('Coordinate conversion functions not available');
+                    }
+
+                    // Always import on top of existing content (no dialog)
+                    console.log('Importing objects on top of current scene (keeping current settings)');
+
+                    // Import objects - always use merge mode (transform with current function)
+                    const isMergeMode = true;
+                    console.log('Available objects in data:', Object.keys(jsonData.objects));
+                    console.log(`Scene BEFORE import - strokes: ${strokes.length}, dots: ${dots.length}, texts: ${texts.length}, images: ${images.length}, videos: ${videos.length}`);
+
+                    let totalImported = 0;
+                    let importErrors = [];
+
+                    // Import strokes
+                    if (jsonData.objects.strokes && Array.isArray(jsonData.objects.strokes)) {
+                        console.log(`Found ${jsonData.objects.strokes.length} strokes to import`);
+                        try {
+                            const imported = importStrokes(jsonData.objects.strokes, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported ${imported} strokes`);
+                        } catch (error) {
+                            console.error('Error importing strokes:', error);
+                            importErrors.push(`strokes: ${error.message}`);
+                        }
+                    }
+
+                    // Import dots
+                    if (jsonData.objects.dots && Array.isArray(jsonData.objects.dots)) {
+                        console.log(`Found ${jsonData.objects.dots.length} dots to import`);
+                        try {
+                            const imported = importDots(jsonData.objects.dots, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported ${imported} dots`);
+                        } catch (error) {
+                            console.error('Error importing dots:', error);
+                            importErrors.push(`dots: ${error.message}`);
+                        }
+                    }
+
+                    // Import texts
+                    if (jsonData.objects.texts && Array.isArray(jsonData.objects.texts)) {
+                        console.log(`Found ${jsonData.objects.texts.length} texts to import`);
+                        try {
+                            const imported = importTexts(jsonData.objects.texts, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported ${imported} texts`);
+                        } catch (error) {
+                            console.error('Error importing texts:', error);
+                            importErrors.push(`texts: ${error.message}`);
+                        }
+                    }
+
+                    // Import images
+                    if (jsonData.objects.images && Array.isArray(jsonData.objects.images)) {
+                        console.log(`Found ${jsonData.objects.images.length} images to import`);
+                        try {
+                            const imported = importImages(jsonData.objects.images, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported ${imported} images`);
+                        } catch (error) {
+                            console.error('Error importing images:', error);
+                            importErrors.push(`images: ${error.message}`);
+                        }
+                    }
+
+                    // Import videos
+                    if (jsonData.objects.videos && Array.isArray(jsonData.objects.videos)) {
+                        console.log(`Found ${jsonData.objects.videos.length} videos to import`);
+                        try {
+                            const imported = importVideos(jsonData.objects.videos, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported ${imported} videos`);
+                        } catch (error) {
+                            console.error('Error importing videos:', error);
+                            importErrors.push(`videos: ${error.message}`);
+                        }
+                    }
+
+                    // Import chessboard only if none exists
+                    if (jsonData.objects.chessboard && !chessboard) {
+                        console.log(`Found chessboard to import`);
+                        try {
+                            const imported = importChessboard(jsonData.objects.chessboard, isMergeMode);
+                            totalImported += imported;
+                            console.log(`Successfully imported chessboard`);
+                        } catch (error) {
+                            console.error('Error importing chessboard:', error);
+                            importErrors.push(`chessboard: ${error.message}`);
+                        }
+                    }
+
+                    console.log(`Scene AFTER import - strokes: ${strokes.length}, dots: ${dots.length}, texts: ${texts.length}, images: ${images.length}, videos: ${videos.length}`);
+
+                    // Log what was actually added to the arrays
+                    console.log('Final arrays content after import:');
+                    console.log('Strokes:', strokes.map(s => ({ mode: s.mode, canvas: s.canvas, points: s.pts?.length || 0 })));
+                    console.log('Dots:', dots.map(d => ({ canvas: d.canvas, z: d.z, w: d.w })));
+                    console.log('Texts:', texts.map(t => ({ text: t.text, canvas: t.canvas })));
+                    console.log('Images:', images.map(i => ({ canvas: i.canvas, width: i.width, height: i.height })));
+                    console.log('Videos:', videos.map(v => ({ animationType: v.animationType, canvas: v.canvas })));
+
+                    // Force a complete redraw and update transformations
+                    // Use a small delay to ensure all async operations complete
+                    setTimeout(() => {
+                        updateAllTransformations();
+                        redrawAll();
+                        console.log('Canvas data import and transformation update completed successfully');
+                        console.log(`Final scene after transformations - strokes: ${strokes.length}, dots: ${dots.length}, texts: ${texts.length}, images: ${images.length}, videos: ${videos.length}`);
+                    }, 50);
+
+                    console.log('Canvas data import initiated successfully');
+
+                    // Show success message
+                    if (importErrors.length > 0) {
+                        const errorMsg = `Import completed with errors: ${importErrors.join(', ')}. Successfully imported ${totalImported} objects.`;
+                        console.warn(errorMsg);
+                        showNotification(errorMsg, 'domain');
+                    } else {
+                        const successMsg = `Import successful! Added ${totalImported} objects to scene.`;
+                        console.log(successMsg);
+                        showNotification(successMsg, 'domain');
+                    }
+
+                } catch (error) {
+                    console.error('Error importing canvas data:', error);
+                    console.error('Error stack:', error.stack);
+                    showNotification(`Error importing canvas data: ${error.message}`, 'domain');
+                }
+            };
+
+            reader.onerror = function () {
+                console.error('Error reading file');
+                showNotification('Error reading file', 'domain');
+            };
+
+            reader.readAsText(file);
+        }
+
+        // Clear all current drawings
+        function clearAllDrawings() {
+            strokes.length = 0;
+            dots.length = 0;
+            texts.length = 0;
+            images.length = 0;
+            videos.length = 0;
+            chessboard = null;
+        }
+
+        // Restore settings from imported data
+        function restoreSettings(settings) {
+            try {
+                if (settings.functionSelect && functionSelect) {
+                    functionSelect.value = settings.functionSelect;
+                }
+                if (settings.toolSelect && toolSelect) {
+                    toolSelect.value = settings.toolSelect;
+                }
+                if (settings.paramValue && paramInput) {
+                    paramInput.value = settings.paramValue;
+                }
+                if (typeof settings.snapToGrid === 'boolean') {
+                    snapToGrid = settings.snapToGrid;
+                }
+                if (typeof settings.continuousInverse === 'boolean' && continuousToggle) {
+                    continuousToggle.checked = settings.continuousInverse;
+                }
+                if (typeof settings.scale === 'number') {
+                    scale = settings.scale;
+                }
+                if (typeof settings.baseScale === 'number') {
+                    baseScale = settings.baseScale;
+                }
+                if (settings.origin && typeof settings.origin.domain === 'object' && typeof settings.origin.codomain === 'object') {
+                    origin = settings.origin;
+                }
+
+                // Update UI elements based on restored tool selection
+                if (settings.toolSelect && toolSelect) {
+                    paramLabel.style.display = (['spiral', 'star', 'polygon'].includes(toolSelect.value)) ? 'inline-block' : 'none';
+                    textLabel.style.display = (toolSelect.value === 'text') ? 'inline-block' : 'none';
+                    videoLabel.style.display = (toolSelect.value === 'video') ? 'inline-block' : 'none';
+                }
+
+                console.log('Settings restored successfully');
+            } catch (error) {
+                console.warn('Error restoring some settings:', error);
+            }
+        }
+
+        // Import strokes with proper reconstruction
+        function importStrokes(strokesData, isMergeMode = false) {
+            if (!Array.isArray(strokesData)) {
+                console.warn('strokesData is not an array:', strokesData);
+                return 0;
+            }
+
+            console.log(`Starting import of ${strokesData.length} strokes, merge mode: ${isMergeMode}`);
+            let successCount = 0;
+
+            strokesData.forEach((strokeData, index) => {
+                try {
+                    console.log(`Importing stroke ${index + 1}:`, strokeData);
+
+                    const stroke = {
+                        canvas: strokeData.canvas || 'domain',
+                        mode: strokeData.mode || 'freehand',
+                        hue: strokeData.hue || 0,
+                        paramValue: strokeData.paramValue || null,
+                        pts: [],
+                        imagePts: []
+                    };
+
+                    // Reconstruct the stroke based on its mode
+                    if (['circle', 'line', 'polygon', 'star', 'spiral', 'sine'].includes(stroke.mode)) {
+                        // For circles, check if we have stored points data first
+                        if (stroke.mode === 'circle' && strokeData.pts && strokeData.pts.length > 0) {
+                            console.log(`Loading circle with stored ${strokeData.pts.length} points`);
+                            stroke.pts = strokeData.pts;
+                            stroke.imagePts = strokeData.imagePts || [];
+
+                            // Store center and radius information if available
+                            if (strokeData.center) stroke.center = strokeData.center;
+                            if (strokeData.radius !== undefined) stroke.radius = strokeData.radius;
+
+                            // If imagePts are missing or in merge mode, recalculate them using current function
+                            if (stroke.pts.length > 0 && (stroke.imagePts.length === 0 || isMergeMode)) {
+                                console.log(`Recalculating imagePts for circle (merge mode: ${isMergeMode})`);
+                                stroke.imagePts = stroke.pts.map(p => {
+                                    const z = toComplex(p.x, p.y, stroke.canvas);
+                                    const targetCanvas = stroke.canvas === 'domain' ? 'codomain' : 'domain';
+                                    const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                    return toCanvas(w, targetCanvas);
+                                });
+                            }
+                        } else {
+                            // For geometric shapes without stored points, reconstruct using computePts
+                            const startPoint = strokeData.startPoint;
+                            const endPoint = strokeData.endPoint;
+
+                            console.log(`Reconstructing ${stroke.mode} from`, startPoint, 'to', endPoint);
+
+                            if (startPoint && endPoint) {
+                                // Special handling for Bezier lines
+                                if (stroke.mode === 'line' && strokeData.controlPoints && strokeData.isBezier) {
+                                    console.log(`Reconstructing Bezier line with ${strokeData.controlPoints.length} control points`);
+
+                                    // Restore Bezier control points
+                                    stroke.controlPoints = strokeData.controlPoints;
+                                    stroke.isBezier = strokeData.isBezier;
+
+                                    // Generate Bezier curve points for rendering
+                                    stroke.smoothedPts = generateBezierCurve(stroke.controlPoints);
+                                    stroke.pts = [startPoint, endPoint]; // Keep original start/end for compatibility
+
+                                    // Compute transformed points using CURRENT function
+                                    stroke.smoothedImagePts = stroke.smoothedPts.map(p => {
+                                        const z = toComplex(p.x, p.y, stroke.canvas);
+                                        const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                        return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                                    });
+
+                                    // For compatibility, also set imagePts
+                                    stroke.imagePts = [startPoint, endPoint].map(p => {
+                                        const z = toComplex(p.x, p.y, stroke.canvas);
+                                        const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                        return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                                    });
+                                } else {
+                                    // Regular geometric shape reconstruction
+                                    // Set the active canvas temporarily for computePts
+                                    const originalCanvas = activeCanvas;
+                                    const originalParam = paramInput ? paramInput.value : null;
+
+                                    try {
+                                        activeCanvas = stroke.canvas;
+
+                                        // Set parameter value if needed (but not in merge mode to preserve current settings)
+                                        if (stroke.paramValue !== null && paramInput && !isMergeMode) {
+                                            paramInput.value = stroke.paramValue;
+                                        }
+
+                                        // Compute points using the same logic as user drawing
+                                        const pts = computePts(stroke.mode, startPoint, endPoint);
+
+                                        if (!pts || pts.length === 0) {
+                                            console.warn(`computePts returned empty array for ${stroke.mode}`);
+                                            return; // Skip this stroke
+                                        }
+
+                                        stroke.pts = pts;
+                                        console.log(`Generated ${pts.length} points for ${stroke.mode}`);
+
+                                        // Apply smoothing for freehand-like quality
+                                        let smoothedPts = pts;
+                                        if (stroke.mode === 'freehand' && pts.length > 10) {
+                                            smoothedPts = catmullRomSmooth(pts, 4);
+                                        } else if (['sine', 'spiral'].includes(stroke.mode) && pts.length > 5) {
+                                            smoothedPts = smoothPoints(pts, 1.5);
+                                        } else if (pts.length > 3) {
+                                            smoothedPts = smoothPoints(pts, 1);
+                                        }
+
+                                        // Store smoothed points
+                                        stroke.smoothedPts = smoothedPts;
+
+                                        // Compute transformed points using CURRENT function (important for merge mode)
+                                        stroke.imagePts = pts.map(p => {
+                                            const z = toComplex(p.x, p.y, stroke.canvas);
+                                            const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                            return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                                        });
+
+                                        // Compute smoothed transformed points using CURRENT function
+                                        stroke.smoothedImagePts = smoothedPts.map(p => {
+                                            const z = toComplex(p.x, p.y, stroke.canvas);
+                                            const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                            return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                                        });
+
+                                        // Store geometric properties for circles
+                                        if (stroke.mode === 'circle') {
+                                            stroke.center = strokeData.center || {
+                                                x: (startPoint.x + endPoint.x) / 2,
+                                                y: (startPoint.y + endPoint.y) / 2
+                                            };
+                                            stroke.radius = strokeData.radius || Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) / 2;
+                                        }
+                                    } catch (computeError) {
+                                        console.error(`Error computing points for ${stroke.mode}:`, computeError);
+                                        return; // Skip this stroke
+                                    } finally {
+                                        // Restore original context
+                                        activeCanvas = originalCanvas;
+                                        if (originalParam !== null && paramInput && !isMergeMode) {
+                                            paramInput.value = originalParam;
+                                        }
+                                    }
+                                }
+                            } else {
+                                console.warn(`Missing startPoint or endPoint for ${stroke.mode}:`, { startPoint, endPoint });
+                                return; // Skip this stroke
+                            }
+                        }
+                    } else {
+                        // For freehand strokes, use the stored points directly
+                        stroke.pts = strokeData.pts || [];
+                        stroke.imagePts = strokeData.imagePts || [];
+
+                        console.log(`Loading freehand stroke with ${stroke.pts.length} points`);
+
+                        // Apply smoothing to freehand strokes
+                        if (stroke.mode === 'freehand' && stroke.pts.length > 10) {
+                            stroke.smoothedPts = catmullRomSmooth(stroke.pts, 4);
+                        } else if (stroke.pts.length > 3) {
+                            stroke.smoothedPts = smoothPoints(stroke.pts, 1);
+                        } else {
+                            stroke.smoothedPts = stroke.pts;
+                        }
+
+                        // If imagePts are missing or in merge mode, recalculate them using current function
+                        if (stroke.pts.length > 0 && (stroke.imagePts.length === 0 || isMergeMode)) {
+                            console.log(`Recalculating imagePts for freehand stroke (merge mode: ${isMergeMode})`);
+                            stroke.imagePts = stroke.pts.map(p => {
+                                const z = toComplex(p.x, p.y, stroke.canvas);
+                                const w = stroke.canvas === 'domain' ? userFn(z) : invFn(z);
+                                return toCanvas(w, stroke.canvas === 'domain' ? 'codomain' : 'domain');
+                            });
+                        }
+
+                        // Apply smoothing to transformed points (always recalculate in merge mode)
+                        if (stroke.imagePts.length > 0) {
+                            if (stroke.mode === 'freehand' && stroke.imagePts.length > 10) {
+                                stroke.smoothedImagePts = catmullRomSmooth(stroke.imagePts, 4);
+                            } else if (stroke.imagePts.length > 3) {
+                                stroke.smoothedImagePts = smoothPoints(stroke.imagePts, 1);
+                            } else {
+                                stroke.smoothedImagePts = stroke.imagePts;
+                            }
+                        }
+                    }
+
+                    // Final safety check: if stroke has no renderable points, skip it
+                    if (!stroke.pts || stroke.pts.length === 0) {
+                        console.warn(`Skipping stroke ${index + 1} - no points to render`);
+                        return;
+                    }
+
+                    strokes.push(stroke);
+                    successCount++;
+                    console.log(`Successfully imported stroke ${index + 1} with ${stroke.pts.length} points`);
+                } catch (error) {
+                    console.error(`Error importing stroke ${index + 1}:`, error, strokeData);
+                }
+            });
+
+            console.log(`Imported ${successCount}/${strokesData.length} strokes successfully, total strokes now: ${strokes.length}`);
+            return successCount;
+        }
+
+        // Import dots
+        function importDots(dotsData, isMergeMode = false) {
+            if (!Array.isArray(dotsData)) {
+                console.warn('dotsData is not an array:', dotsData);
+                return 0;
+            }
+
+            console.log(`Starting import of ${dotsData.length} dots, merge mode: ${isMergeMode}`);
+            let successCount = 0;
+
+            dotsData.forEach((dotData, index) => {
+                try {
+                    console.log(`Importing dot ${index + 1}:`, dotData);
+
+                    const dot = {
+                        canvas: dotData.canvas || 'domain',
+                        z: dotData.z || { re: 0, im: 0 },
+                        w: dotData.w || { re: 0, im: 0 },
+                        label: { dom: dotData.z || { re: 0, im: 0 } } // Required for rendering
+                    };
+
+                    // In merge mode, always recalculate using current function
+                    // In new mode, recalculate only if coordinate is missing
+                    if (isMergeMode) {
+                        if (dot.canvas === 'domain') {
+                            console.log(`Recalculating w coordinate for domain dot in merge mode`);
+                            dot.w = userFn(dot.z);
+                        } else {
+                            console.log(`Recalculating z coordinate for codomain dot in merge mode`);
+                            try {
+                                dot.z = invFn(dot.w);
+                            } catch (error) {
+                                console.warn('Could not compute inverse for dot:', error);
+                                dot.z = dotData.z || { re: 0, im: 0 };
+                            }
+                        }
+                    } else {
+                        // New mode - only recalculate if missing
+                        if (dot.canvas === 'domain' && (!dot.w || (dot.w.re === 0 && dot.w.im === 0))) {
+                            console.log(`Calculating missing w coordinate for domain dot`);
+                            dot.w = userFn(dot.z);
+                        } else if (dot.canvas === 'codomain' && (!dot.z || (dot.z.re === 0 && dot.z.im === 0))) {
+                            console.log(`Calculating missing z coordinate for codomain dot`);
+                            try {
+                                dot.z = invFn(dot.w);
+                            } catch (error) {
+                                console.warn('Could not compute inverse for dot:', error);
+                                dot.z = dotData.z || { re: 0, im: 0 };
+                            }
+                        }
+                    }
+
+                    dots.push(dot);
+                    successCount++;
+                    console.log(`Successfully imported dot ${index + 1}`);
+                } catch (error) {
+                    console.error(`Error importing dot ${index + 1}:`, error, dotData);
+                }
+            });
+
+            console.log(`Imported ${successCount}/${dotsData.length} dots successfully, total dots now: ${dots.length}`);
+            return successCount;
+        }
+
+        // Import texts
+        function importTexts(textsData, isMergeMode = false) {
+            if (!Array.isArray(textsData)) {
+                console.warn('textsData is not an array:', textsData);
+                return 0;
+            }
+
+            console.log(`Starting import of ${textsData.length} texts, merge mode: ${isMergeMode}`);
+            let successCount = 0;
+
+            textsData.forEach((textData, index) => {
+                try {
+                    console.log(`Importing text ${index + 1}:`, textData);
+
+                    const text = {
+                        text: textData.text || '',
+                        canvas: textData.canvas || 'domain',
+                        x: textData.x || 0,
+                        y: textData.y || 0,
+                        width: textData.width || 100,
+                        height: textData.height || 50,
+                        fontSize: textData.fontSize || 24,
+                        color: textData.color || '#ffffff',
+                        fontFamily: textData.fontFamily || 'Arial',
+                        corners: textData.corners || []
+                    };
+
+                    // Initialize corners if not provided
+                    if (text.corners.length === 0) {
+                        text.corners = [
+                            { x: text.x, y: text.y },
+                            { x: text.x + text.width, y: text.y },
+                            { x: text.x + text.width, y: text.y + text.height },
+                            { x: text.x, y: text.y + text.height }
+                        ];
+                    }
+
+                    texts.push(text);
+                    successCount++;
+                    console.log(`Successfully imported text ${index + 1}: "${text.text}"`);
+                } catch (error) {
+                    console.error(`Error importing text ${index + 1}:`, error, textData);
+                }
+            });
+
+            console.log(`Imported ${successCount}/${textsData.length} texts successfully, total texts now: ${texts.length}`);
+            return successCount;
+        }
+
+        // Import images
+        function importImages(imagesData, isMergeMode = false) {
+            if (!Array.isArray(imagesData)) {
+                console.warn('imagesData is not an array:', imagesData);
+                return 0;
+            }
+
+            console.log(`Starting import of ${imagesData.length} images, merge mode: ${isMergeMode}`);
+            let successCount = 0;
+
+            imagesData.forEach((imageData, index) => {
+                try {
+                    console.log(`Importing image ${index + 1}:`, imageData);
+
+                    if (!imageData.dataURL) {
+                        console.warn('Skipping image without dataURL');
+                        return;
+                    }
+
+                    const img = new Image();
+                    img.onload = function () {
+                        const imageObj = {
+                            element: img,
+                            canvas: imageData.canvas || 'domain',
+                            x: imageData.x || 0,
+                            y: imageData.y || 0,
+                            width: imageData.width || 100,
+                            height: imageData.height || 100,
+                            originalWidth: imageData.originalWidth || img.naturalWidth,
+                            originalHeight: imageData.originalHeight || img.naturalHeight,
+                            scaleFactor: imageData.scaleFactor || 1,
+                            corners: imageData.corners || []
+                        };
+
+                        // Initialize corners if not provided
+                        if (imageObj.corners.length === 0) {
+                            imageObj.corners = [
+                                { x: imageObj.x, y: imageObj.y },
+                                { x: imageObj.x + imageObj.width, y: imageObj.y },
+                                { x: imageObj.x + imageObj.width, y: imageObj.y + imageObj.height },
+                                { x: imageObj.x, y: imageObj.y + imageObj.height }
+                            ];
+                        }
+
+                        images.push(imageObj);
+                        console.log(`Successfully loaded imported image ${index + 1}`);
+                        redrawAll(); // Redraw when image loads
+                    };
+
+                    img.onerror = function () {
+                        console.warn(`Failed to load imported image ${index + 1}`);
+                    };
+
+                    img.src = imageData.dataURL;
+                    successCount++; // Count as successful even if loading is async
+                } catch (error) {
+                    console.warn(`Error importing image ${index + 1}:`, error, imageData);
+                }
+            });
+
+            console.log(`Started loading ${successCount}/${imagesData.length} images successfully`);
+            return successCount;
+        }
+
+        // Import videos/animations
+        function importVideos(videosData, isMergeMode = false) {
+            if (!Array.isArray(videosData)) {
+                console.warn('videosData is not an array:', videosData);
+                return 0;
+            }
+
+            console.log(`Starting import of ${videosData.length} videos, merge mode: ${isMergeMode}`);
+            let successCount = 0;
+
+            videosData.forEach((videoData, index) => {
+                try {
+                    console.log(`Importing video ${index + 1}:`, videoData);
+
+                    const video = {
+                        animationType: videoData.animationType || 'rainbow_waves',
+                        canvas: videoData.canvas || 'domain',
+                        x: videoData.x || 0,
+                        y: videoData.y || 0,
+                        width: videoData.width || 100,
+                        height: videoData.height || 100,
+                        corners: videoData.corners || [],
+                        animationTime: videoData.animationTime || 0,
+                        element: null // Will be created when needed
+                    };
+
+                    // Initialize corners if not provided
+                    if (video.corners.length === 0) {
+                        video.corners = [
+                            { x: video.x, y: video.y },
+                            { x: video.x + video.width, y: video.y },
+                            { x: video.x + video.width, y: video.y + video.height },
+                            { x: video.x, y: video.y + video.height }
+                        ];
+                    }
+
+                    videos.push(video);
+                    successCount++;
+                    console.log(`Successfully imported video ${index + 1}: ${video.animationType}`);
+                } catch (error) {
+                    console.warn(`Error importing video ${index + 1}:`, error, videoData);
+                }
+            });
+
+            console.log(`Imported ${successCount}/${videosData.length} videos successfully, total videos now: ${videos.length}`);
+            return successCount;
+        }
+
+        // Import chessboard/grid
+        function importChessboard(chessboardData, isMergeMode = false) {
+            if (!chessboardData) {
+                console.warn('chessboardData is null or undefined:', chessboardData);
+                return 0;
+            }
+
+            console.log(`Starting import of chessboard`);
+
+            try {
+                // Only import if no chessboard exists (don't replace existing one)
+                if (chessboard) {
+                    console.log('Chessboard already exists, skipping import');
+                    return 0;
+                }
+
+                chessboard = {
+                    corners: chessboardData.corners || [],
+                    gridSize: chessboardData.gridSize || 10,
+                    center: chessboardData.center || { x: 0, y: 0 },
+                    isVisible: true
+                };
+
+                console.log('Successfully imported chessboard/grid');
+                return 1;
+            } catch (error) {
+                console.warn('Error importing chessboard:', error, chessboardData);
+                return 0;
+            }
         }
     </script>
     <!-- Thank You Icon -->
